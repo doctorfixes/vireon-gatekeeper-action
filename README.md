@@ -57,7 +57,7 @@ jobs:
 
 ## 🔐 Permissions
 
-This Action requires:
+Add this block to your workflow file to grant the required permissions. The `action.yml` lists them for reference, but permissions must be declared in your workflow:
 
 ```yaml
 permissions:

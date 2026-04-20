@@ -23,16 +23,29 @@ async function run() {
       const res = await fetch(pr.diff_url, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) {
+        core.setFailed(`Failed to fetch PR diff: HTTP ${res.status} ${res.statusText}`);
+        return;
+      }
       diffText = await res.text();
     }
 
     writeFileSync("vireon_diff.txt", diffText);
 
-    const output = execFileSync(
-      "vireon",
-      ["gatekeeper", "analyze", "--diff", "vireon_diff.txt", "--output", "result.json"],
-      { encoding: "utf8" }
-    );
+    let output;
+    try {
+      output = execFileSync(
+        "vireon",
+        ["gatekeeper", "analyze", "--diff", "vireon_diff.txt", "--output", "result.json"],
+        { encoding: "utf8" }
+      );
+    } catch (err) {
+      const msg = err.code === "ENOENT"
+        ? "Vireon CLI not found. Ensure the `vireon` binary is installed and available on PATH."
+        : `Vireon CLI analysis failed: ${err.message}`;
+      core.setFailed(msg);
+      return;
+    }
 
     console.log(output);
 
