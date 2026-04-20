@@ -1,25 +1,23 @@
-name: 'Vireon Gatekeeper'
-description: 'Automated PR review and gating powered by the Vireon Gatekeeper CLI'
+name: "Gatekeeper by Vireon"
+description: "Governance-grade enforcement engine for pull requests. Powered by Vireon, the Intelligence Engine."
+author: "Vireon"
 branding:
-  icon: 'shield'
-  color: 'blue'
+  icon: shield
+  color: blue
 
 inputs:
-  github_token:
-    description: 'GitHub token used to fetch the PR diff and post review comments'
+  token:
+    description: "GitHub token for PR context"
     required: true
-  vireon_api_key:
-    description: 'Vireon API key for authenticating with the Gatekeeper service'
-    required: true
-  fail_on_issues:
-    description: 'Set to "true" to fail the workflow step when issues are detected'
+  diff:
+    description: "Optional diff override (defaults to PR diff)"
     required: false
-    default: 'true'
-  severity_threshold:
-    description: 'Minimum severity level to report (low | medium | high | critical)'
-    required: false
-    default: 'medium'
 
 runs:
-  using: 'node20'
-  main: 'index.js'
+  using: "node20"
+  main: "index.js"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
