@@ -1,0 +1,21 @@
+{
+  "name": "vireon-gatekeeper-action",
+  "version": "1.0.0",
+  "description": "GitHub Action wrapper for the Vireon Gatekeeper automated PR review CLI",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "github-action",
+    "code-review",
+    "gatekeeper",
+    "vireon",
+    "pull-request"
+  ],
+  "author": "doctorfixes",
+  "license": "MIT"
+}
