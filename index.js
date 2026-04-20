@@ -1,4 +1,5 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
+import { writeFileSync, readFileSync } from "fs";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import fetch from "node-fetch";
@@ -14,22 +15,28 @@ async function run() {
     if (diffOverride) {
       diffText = diffOverride;
     } else {
-      const diffUrl = github.context.payload.pull_request.diff_url;
-      const res = await fetch(diffUrl);
+      const pr = github.context.payload.pull_request;
+      if (!pr) {
+        core.setFailed("This action must run on a pull_request event.");
+        return;
+      }
+      const res = await fetch(pr.diff_url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       diffText = await res.text();
     }
 
-    const fs = await import("fs");
-    fs.writeFileSync("vireon_diff.txt", diffText);
+    writeFileSync("vireon_diff.txt", diffText);
 
-    const output = execSync(
-      `vireon gatekeeper analyze --diff vireon_diff.txt --output result.json`,
+    const output = execFileSync(
+      "vireon",
+      ["gatekeeper", "analyze", "--diff", "vireon_diff.txt", "--output", "result.json"],
       { encoding: "utf8" }
     );
 
     console.log(output);
 
-    const result = JSON.parse(fs.readFileSync("result.json", "utf8"));
+    const result = JSON.parse(readFileSync("result.json", "utf8"));
 
     const { owner, repo, number } = github.context.issue;
 
@@ -49,13 +56,12 @@ ${JSON.stringify(result.issues, null, 2)}
 \`\`\`
 
 </details>
-`
+`,
     });
 
     if (result.verdict === "fail") {
       core.setFailed("Vireon Gatekeeper blocked this PR due to high risk.");
     }
-
   } catch (err) {
     core.setFailed(`Gatekeeper error: ${err.message}`);
   }
