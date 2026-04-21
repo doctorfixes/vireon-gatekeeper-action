@@ -42,9 +42,9 @@ function loadConfig(configPath) {
   }
 }
 
-function buildCliArgs(configPath, existsSync) {
+function buildCliArgs(configPath, configExists) {
   const args = ["gatekeeper", "analyze", "--diff", "vireon_diff.txt", "--output", "result.json"];
-  if (existsSync(configPath)) {
+  if (configExists(configPath)) {
     args.push("--config", configPath);
   }
   return args;

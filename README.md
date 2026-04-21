@@ -58,7 +58,7 @@ jobs:
 
 ## ⚙️ Configuration
 
-Create `.github/gatekeeper.yml` in your repository to customize Gatekeeper's behaviour:
+Create `.github/gatekeeper.yml` in your repository to customize Gatekeeper's behavior:
 
 ```yaml
 mode: advisory   # "advisory" posts findings as a warning without blocking the PR
