@@ -107,7 +107,7 @@ function runNativeChecks(diffText, config, customRules = []) {
     const result = check.check(context);
     if (!result.passed) anyFailed = true;
     for (const msg of result.messages) {
-      allIssues.push(msg);
+      allIssues.push({ rule: check.id, ...msg });
     }
   }
 
