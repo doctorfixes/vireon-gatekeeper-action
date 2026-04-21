@@ -1,12 +1,59 @@
 import { execFileSync } from "child_process";
 import { writeFileSync, readFileSync, existsSync } from "fs";
+import { resolve as resolvePath, sep } from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import fetch from "node-fetch";
 import yaml from "js-yaml";
 import semanticDrift from "./checks/semantic-drift.js";
 
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+const RULES_DIR = resolvePath(__dirname, "rules");
 const NATIVE_CHECKS = [semanticDrift];
+const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
+
+// Only alphanumeric characters, hyphens, and underscores are permitted in rule
+// IDs. This prevents path traversal attacks when constructing the file path
+// for custom rules (e.g. an ID of "../../evil" must be rejected).
+const VALID_RULE_ID = /^[a-zA-Z0-9_-]+$/;
+
+async function loadCustomRules(ruleIds) {
+  const rules = [];
+
+  for (const id of ruleIds) {
+    if (NATIVE_IDS.has(id)) continue;
+
+    if (!VALID_RULE_ID.test(id)) {
+      core.warning(
+        `Skipping rule with invalid ID "${id}": only alphanumeric characters, hyphens, and underscores are allowed.`
+      );
+      continue;
+    }
+
+    // Defense-in-depth: even though the regex above already disallows the
+    // characters needed for traversal, resolve the path and confirm it stays
+    // inside RULES_DIR before importing.
+    const rulePath = resolvePath(RULES_DIR, `${id}.js`);
+    if (!rulePath.startsWith(RULES_DIR + sep)) {
+      core.warning(`Skipping rule "${id}": resolved path is outside the rules directory.`);
+      continue;
+    }
+
+    try {
+      if (!existsSync(rulePath)) {
+        core.warning(`Skipping rule "${id}": file not found at ${rulePath}`);
+        continue;
+      }
+      const mod = await import(pathToFileURL(rulePath).href);
+      rules.push(mod.default ?? mod);
+    } catch (err) {
+      core.warning(`Failed to load rule "${id}": ${err.message}`);
+    }
+  }
+
+  return rules;
+}
 
 // Each detected issue contributes this many points toward the 0-100 risk score.
 const RISK_SCORE_PER_ISSUE = 20;
@@ -48,14 +95,14 @@ function loadConfig(configPath) {
   }
 }
 
-function runNativeChecks(diffText, config) {
+function runNativeChecks(diffText, config, customRules = []) {
   const activeRules = new Set(config.rules.length > 0 ? config.rules : NATIVE_CHECKS.map((c) => c.id));
   const context = { diff: diffText, sensitivity: config.settings.drift.sensitivity };
 
   const allIssues = [];
   let anyFailed = false;
 
-  for (const check of NATIVE_CHECKS) {
+  for (const check of [...NATIVE_CHECKS, ...customRules]) {
     if (!activeRules.has(check.id)) continue;
     const result = check.check(context);
     if (!result.passed) anyFailed = true;
@@ -161,7 +208,8 @@ async function run() {
     } catch (err) {
       if (err.code === "ENOENT") {
         core.info("Vireon CLI not found — running built-in checks.");
-        result = runNativeChecks(diffText, config);
+        const customRules = await loadCustomRules(config.rules);
+        result = runNativeChecks(diffText, config, customRules);
       } else {
         core.setFailed(`Vireon CLI analysis failed: ${err.message}`);
         return;
