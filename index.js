@@ -4,6 +4,12 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import fetch from "node-fetch";
 import yaml from "js-yaml";
+import semanticDrift from "./checks/semantic-drift.js";
+
+const NATIVE_CHECKS = [semanticDrift];
+
+// Each detected issue contributes this many points toward the 0-100 risk score.
+const RISK_SCORE_PER_ISSUE = 20;
 
 function loadConfig(configPath) {
   const defaults = {
@@ -40,6 +46,33 @@ function loadConfig(configPath) {
     core.warning(`Failed to parse config file at ${configPath}: ${err.message}. Using defaults.`);
     return defaults;
   }
+}
+
+function runNativeChecks(diffText, config) {
+  const activeRules = new Set(config.rules.length > 0 ? config.rules : NATIVE_CHECKS.map((c) => c.id));
+  const context = { diff: diffText, sensitivity: config.settings.drift.sensitivity };
+
+  const allIssues = [];
+  let anyFailed = false;
+
+  for (const check of NATIVE_CHECKS) {
+    if (!activeRules.has(check.id)) continue;
+    const result = check.check(context);
+    if (!result.passed) anyFailed = true;
+    for (const msg of result.messages) {
+      allIssues.push(msg);
+    }
+  }
+
+  const riskScore = allIssues.length > 0 ? Math.min(100, allIssues.length * RISK_SCORE_PER_ISSUE) : 0;
+  return {
+    risk_score: riskScore,
+    verdict: anyFailed ? "fail" : "pass",
+    summary: anyFailed
+      ? "Semantic drift detected — structural changes may violate architectural boundaries."
+      : "No significant semantic drift detected.",
+    issues: allIssues,
+  };
 }
 
 function buildCliArgs(configPath, configExists) {
@@ -120,20 +153,20 @@ async function run() {
 
     const cliArgs = buildCliArgs(configPath, existsSync);
 
-    let output;
+    let result;
     try {
-      output = execFileSync("vireon", cliArgs, { encoding: "utf8" });
+      const output = execFileSync("vireon", cliArgs, { encoding: "utf8" });
+      console.log(output);
+      result = JSON.parse(readFileSync("result.json", "utf8"));
     } catch (err) {
-      const msg = err.code === "ENOENT"
-        ? "Vireon CLI not found. Ensure the `vireon` binary is installed and available on PATH."
-        : `Vireon CLI analysis failed: ${err.message}`;
-      core.setFailed(msg);
-      return;
+      if (err.code === "ENOENT") {
+        core.info("Vireon CLI not found — running built-in checks.");
+        result = runNativeChecks(diffText, config);
+      } else {
+        core.setFailed(`Vireon CLI analysis failed: ${err.message}`);
+        return;
+      }
     }
-
-    console.log(output);
-
-    const result = JSON.parse(readFileSync("result.json", "utf8"));
 
     const { owner, repo, number } = github.context.issue;
 
