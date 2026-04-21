@@ -80,13 +80,16 @@ export default {
   id: "semantic-drift",
   description: "Detects meaningful structural changes in the codebase.",
   check(context) {
-    const { diff = "", sensitivity = "medium" } = context;
-    const threshold = SENSITIVITY_THRESHOLDS[sensitivity] ?? SENSITIVITY_THRESHOLDS.medium;
+    const { diff = "", sensitivity = "medium", threshold = null } = context;
+    const resolvedThreshold =
+      typeof threshold === "number"
+        ? Math.max(0, Math.min(1, threshold))
+        : (SENSITIVITY_THRESHOLDS[sensitivity] ?? SENSITIVITY_THRESHOLDS.medium);
 
     const files = parseDiff(diff);
     const changes = analyzeChanges(files);
     const driftScore = computeDriftScore(changes, files.length);
-    const passed = driftScore < threshold;
+    const passed = driftScore < resolvedThreshold;
 
     return {
       passed,

@@ -7,10 +7,12 @@ import * as github from "@actions/github";
 import fetch from "node-fetch";
 import yaml from "js-yaml";
 import semanticDrift from "./checks/semantic-drift.js";
+import architectureBoundaries from "./checks/architecture-boundaries.js";
+import namingConventions from "./checks/naming-conventions.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const RULES_DIR = resolvePath(__dirname, "rules");
-const NATIVE_CHECKS = [semanticDrift];
+const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
 const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
 
 // Only alphanumeric characters, hyphens, and underscores are permitted in rule
@@ -63,9 +65,12 @@ function loadConfig(configPath) {
     mode: "strict",
     rules: [],
     settings: {
-      drift: { sensitivity: "medium" },
-      comments: { summary: true, explain_why: false },
+      drift: { sensitivity: "medium", threshold: null },
+      comments: { summary: true, explain_why: false, max_messages: null },
+      architecture: { enforce_layers: false, allowed_layers: [] },
+      naming: { enforce_case: false, file_case: "kebab", class_case: "pascal", variable_case: "camel" },
     },
+    plugins: { enabled: [] },
   };
 
   if (!existsSync(configPath)) {
@@ -76,17 +81,39 @@ function loadConfig(configPath) {
   try {
     const raw = readFileSync(configPath, "utf8");
     const parsed = yaml.load(raw) || {};
+    const ds = defaults.settings;
+    const ps = parsed.settings || {};
     return {
       mode: parsed.mode ?? defaults.mode,
       rules: Array.isArray(parsed.rules) ? parsed.rules : defaults.rules,
       settings: {
         drift: {
-          sensitivity: parsed.settings?.drift?.sensitivity ?? defaults.settings.drift.sensitivity,
+          sensitivity: ps.drift?.sensitivity ?? ds.drift.sensitivity,
+          threshold: typeof ps.drift?.threshold === "number" ? ps.drift.threshold : ds.drift.threshold,
         },
         comments: {
-          summary: parsed.settings?.comments?.summary ?? defaults.settings.comments.summary,
-          explain_why: parsed.settings?.comments?.explain_why ?? defaults.settings.comments.explain_why,
+          summary: ps.comments?.summary ?? ds.comments.summary,
+          explain_why: ps.comments?.explain_why ?? ds.comments.explain_why,
+          max_messages:
+            typeof ps.comments?.max_messages === "number"
+              ? ps.comments.max_messages
+              : ds.comments.max_messages,
         },
+        architecture: {
+          enforce_layers: ps.architecture?.enforce_layers ?? ds.architecture.enforce_layers,
+          allowed_layers: Array.isArray(ps.architecture?.allowed_layers)
+            ? ps.architecture.allowed_layers
+            : ds.architecture.allowed_layers,
+        },
+        naming: {
+          enforce_case: ps.naming?.enforce_case ?? ds.naming.enforce_case,
+          file_case: ps.naming?.file_case ?? ds.naming.file_case,
+          class_case: ps.naming?.class_case ?? ds.naming.class_case,
+          variable_case: ps.naming?.variable_case ?? ds.naming.variable_case,
+        },
+      },
+      plugins: {
+        enabled: Array.isArray(parsed.plugins?.enabled) ? parsed.plugins.enabled : defaults.plugins.enabled,
       },
     };
   } catch (err) {
@@ -97,7 +124,13 @@ function loadConfig(configPath) {
 
 function runNativeChecks(diffText, config, customRules = []) {
   const activeRules = new Set(config.rules.length > 0 ? config.rules : NATIVE_CHECKS.map((c) => c.id));
-  const context = { diff: diffText, sensitivity: config.settings.drift.sensitivity };
+  const context = {
+    diff: diffText,
+    sensitivity: config.settings.drift.sensitivity,
+    threshold: config.settings.drift.threshold,
+    architecture: config.settings.architecture,
+    naming: config.settings.naming,
+  };
 
   const allIssues = [];
   let anyFailed = false;
@@ -131,7 +164,7 @@ function buildCliArgs(configPath, configExists) {
 }
 
 function buildComment(result, config) {
-  const { summary, explain_why } = config.settings.comments;
+  const { summary, explain_why, max_messages } = config.settings.comments;
   const advisoryBadge = config.mode === "advisory" ? " *(advisory)*" : "";
 
   let body = `### 🛡️ Vireon Gatekeeper Result${advisoryBadge}  \n`;
@@ -143,10 +176,16 @@ function buildComment(result, config) {
   }
 
   if (result.issues && result.issues.length > 0) {
+    const cappedIssues =
+      max_messages != null && max_messages > 0
+        ? result.issues.slice(0, max_messages)
+        : result.issues;
+    const hiddenCount = result.issues.length - cappedIssues.length;
+
     body += `<details>\n<summary>Issues</summary>\n\n`;
 
     if (explain_why) {
-      const issueLines = result.issues
+      const issueLines = cappedIssues
         .map((issue) => {
           const why = issue.why ? `\n  > *Why:* ${issue.why}` : "";
           return `- **${issue.rule ?? "issue"}**: ${issue.message ?? JSON.stringify(issue)}${why}`;
@@ -154,7 +193,11 @@ function buildComment(result, config) {
         .join("\n");
       body += `${issueLines}\n\n`;
     } else {
-      body += `\`\`\`json\n${JSON.stringify(result.issues, null, 2)}\n\`\`\`\n\n`;
+      body += `\`\`\`json\n${JSON.stringify(cappedIssues, null, 2)}\n\`\`\`\n\n`;
+    }
+
+    if (hiddenCount > 0) {
+      body += `*${hiddenCount} additional issue(s) not shown (max_messages: ${max_messages}).*\n\n`;
     }
 
     body += `</details>\n`;

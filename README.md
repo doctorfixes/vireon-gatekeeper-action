@@ -72,9 +72,25 @@ rules:
 settings:
   drift:
     sensitivity: medium   # low | medium | high
+    threshold: 0.15       # explicit 0.0–1.0 override (takes precedence over sensitivity)
   comments:
     summary: true         # include a plain-text summary in the PR comment
     explain_why: true     # show per-issue "why" explanations in the PR comment
+    max_messages: 10      # cap the number of issues shown in the PR comment
+  architecture:
+    enforce_layers: true
+    allowed_layers:
+      - domain
+      - application
+      - infrastructure
+  naming:
+    enforce_case: true
+    file_case: kebab        # kebab | snake | camel | pascal
+    class_case: pascal
+    variable_case: camel
+
+plugins:
+  enabled: []             # reserved for future custom rule modules
 ```
 
 ### `mode`
@@ -94,9 +110,12 @@ An optional list of rule names to enable. When omitted, all rules configured in 
 | `architecture-boundaries` | Flags changes that violate layering or module boundaries |
 | `naming-conventions` | Enforces consistent identifiers and naming patterns |
 
-### `settings.drift.sensitivity`
+### `settings.drift`
 
-Controls how aggressively the drift detector flags changes: `low`, `medium` (default), or `high`.
+| Key | Default | Description |
+|-----|---------|-------------|
+| `sensitivity` | `medium` | Drift aggressiveness: `low`, `medium`, or `high` |
+| `threshold` | _(from sensitivity)_ | Explicit numeric tolerance 0.0–1.0; overrides `sensitivity` when set |
 
 ### `settings.comments`
 
@@ -104,6 +123,33 @@ Controls how aggressively the drift detector flags changes: `low`, `medium` (def
 |-----|---------|-------------|
 | `summary` | `true` | Prepend a plain-text summary to the PR comment |
 | `explain_why` | `false` | Show per-issue explanations rather than raw JSON |
+| `max_messages` | _(unlimited)_ | Maximum number of issues shown in the PR comment |
+
+### `settings.architecture`
+
+Controls the `architecture-boundaries` rule.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enforce_layers` | `false` | Enable layer-boundary enforcement |
+| `allowed_layers` | `[]` | Ordered list of layer names (innermost first). Inner layers (lower index) cannot import from outer layers (higher index). |
+
+### `settings.naming`
+
+Controls the `naming-conventions` rule.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enforce_case` | `false` | Enable naming-convention checks |
+| `file_case` | `kebab` | Expected casing for file names: `kebab`, `snake`, `camel`, or `pascal` |
+| `class_case` | `pascal` | Expected casing for class/interface names |
+| `variable_case` | `camel` | Expected casing for variable/const/let names |
+
+### `plugins`
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `enabled` | `[]` | Reserved for future custom rule modules |
 
 ---
 
