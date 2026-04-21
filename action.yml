@@ -12,6 +12,10 @@ inputs:
   diff:
     description: "Optional diff override (defaults to PR diff)"
     required: false
+  config:
+    description: "Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
+    required: false
+    default: ".github/gatekeeper.yml"
 
 runs:
   using: "node20"
