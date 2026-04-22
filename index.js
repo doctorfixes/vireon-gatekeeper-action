@@ -10,6 +10,13 @@ import { loadConfig } from "./src/loadConfig.js";
 import { runRules } from "./src/runRules.js";
 import { explainResults } from "./src/explainWhy.js";
 import { buildBaselineFromRepo } from "./src/inferenceEngine.js";
+import {
+  aggregateRepoBaselines,
+  saveOrgBaseline,
+  loadOrgHistory,
+  computeOrgMetrics,
+  generateOrgReport,
+} from "./src/orgGovernance.js";
 
 const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
 const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
@@ -118,6 +125,42 @@ async function run() {
       core.info(`Inferred naming: ${baseline.naming.file_case}`);
       const edgeCount = Object.keys(baseline.boundaries.edges).length;
       core.info(`Inferred boundary edges: ${edgeCount}`);
+      return;
+    }
+
+    // ── Org-governance mode ───────────────────────────────────────────────
+    if (core.getInput("build_org_baseline") === "true") {
+      core.info("Org governance engine: aggregating repo baselines…");
+      const rawInput = core.getInput("repo_baselines") || "[]";
+      let repoBaselines;
+      try {
+        repoBaselines = JSON.parse(rawInput);
+      } catch {
+        core.setFailed("build_org_baseline: repo_baselines must be a valid JSON array.");
+        return;
+      }
+      if (!Array.isArray(repoBaselines)) {
+        core.setFailed("build_org_baseline: repo_baselines must be a JSON array.");
+        return;
+      }
+
+      const orgBaseline = aggregateRepoBaselines(repoBaselines);
+      saveOrgBaseline(orgBaseline);
+      core.info(`Org baseline written to .gatekeeper-org/org-baseline.json`);
+      core.info(`Org history updated in .gatekeeper-org/org-history.json`);
+
+      const orgHistory = loadOrgHistory();
+      const metrics = computeOrgMetrics(orgBaseline, orgHistory, repoBaselines);
+      core.info(`Org metrics written to .gatekeeper-org/org-metrics.json`);
+      core.info(`Org architecture stability: ${metrics.architectureStability.toFixed(2)}`);
+      core.info(`Org naming stability: ${metrics.namingStability.toFixed(2)}`);
+      core.info(`Org boundary stability: ${metrics.boundaryStability.toFixed(2)}`);
+      core.info(`Org drift trend: ${metrics.driftTrend}`);
+      core.info(`Org score: ${metrics.orgScore.toFixed(2)}`);
+
+      generateOrgReport(orgBaseline, metrics, repoBaselines);
+      core.info(`Org report written to .gatekeeper-org/org-report.md`);
+
       return;
     }
 
