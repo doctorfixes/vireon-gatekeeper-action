@@ -19,11 +19,12 @@ import { loadGovernanceContract } from "./src/loadGovernanceContract.js";
  *   ruleResult: Object,
  *   explainedResults: Array,
  *   governanceComment: string,
+ *   healthReport: string,
  *   driftOverTime: Object
  * }} kernelResult
  * @returns {string} Markdown body for the PR comment.
  */
-function buildPRComment({ ruleResult, explainedResults, governanceComment, driftOverTime }) {
+function buildPRComment({ ruleResult, explainedResults, governanceComment, healthReport, driftOverTime }) {
   const driftTrend = driftOverTime?.trend ?? "stable";
   const trendEmoji = { stable: "✅", drifting: "⚠️", critical: "🚨" }[driftTrend] ?? "ℹ️";
   const findingCount = (ruleResult.messages || []).length;
@@ -50,6 +51,12 @@ function buildPRComment({ ruleResult, explainedResults, governanceComment, drift
   if (governanceComment) {
     body += `<details>\n<summary>Governance Contract</summary>\n`;
     body += governanceComment;
+    body += `\n</details>\n`;
+  }
+
+  if (healthReport) {
+    body += `\n<details>\n<summary>Architecture Health Report</summary>\n\n`;
+    body += healthReport.trim();
     body += `\n</details>\n`;
   }
 
