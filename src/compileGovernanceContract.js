@@ -20,8 +20,8 @@ function compileGovernanceContract(contractPath, schemaPath) {
     let schema;
     try {
       schema = JSON.parse(readFileSync(schemaPath, 'utf8'));
-    } catch {
-      // schema not parseable — skip validation
+    } catch (err) {
+      console.warn(`[compileGovernanceContract] Failed to parse schema at "${schemaPath}": ${err.message}`);
       return contract;
     }
     _validateRequiredFields(contract, schema, contractPath);

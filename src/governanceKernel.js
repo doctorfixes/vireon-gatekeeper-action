@@ -80,7 +80,7 @@ async function runGovernanceKernel({
 
   // 9. Generate architecture health report (optional but powerful)
   const healthReport = generateArchitectureHealthReport({
-    baseline: baseline.data || baseline,
+    baseline: (baseline && (baseline.data || baseline)) || { layers: [], naming: {}, boundaries: { edges: {} } },
     history,
     driftOverTime,
     recentFindings: ruleResult.metadata.findings || []
