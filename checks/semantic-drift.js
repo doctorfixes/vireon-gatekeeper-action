@@ -69,32 +69,109 @@ function analyzeChanges(files) {
   return { importChanges, exportChanges, structuralChanges, messages };
 }
 
-function computeDriftScore(changes, fileCount) {
-  if (fileCount === 0) return 0;
-  const { importChanges, exportChanges, structuralChanges } = changes;
-  const weighted = importChanges * 2 + exportChanges * 3 + structuralChanges;
-  return Math.min(1, weighted / Math.max(fileCount * 5, 1));
-}
-
 export default {
   id: "semantic-drift",
-  description: "Detects meaningful structural changes in the codebase.",
-  check(context) {
-    const { diff = "", sensitivity = "medium", threshold = null } = context;
+  description: "Detects structural and dependency drift in the repository.",
+
+  check(context, config) {
+    const {
+      diff = "",
+      changedFiles = [],
+      fileDiffs = null,
+      dependencyGraphBefore = null,
+      dependencyGraphAfter = null,
+      sensitivity = "medium",
+      threshold = null,
+    } = context;
+
     const resolvedThreshold =
       typeof threshold === "number"
         ? Math.max(0, Math.min(1, threshold))
         : (SENSITIVITY_THRESHOLDS[sensitivity] ?? SENSITIVITY_THRESHOLDS.medium);
 
-    const files = parseDiff(diff);
-    const changes = analyzeChanges(files);
-    const driftScore = computeDriftScore(changes, files.length);
-    const passed = driftScore < resolvedThreshold;
+    const messages = [];
+    let driftScore = 0;
+
+    // 1. Detect new files (structural expansion)
+    const newFiles = changedFiles.filter((f) => f.status === "added");
+    if (newFiles.length > 0) {
+      messages.push({
+        rule: "semantic-drift",
+        message: `New files added: ${newFiles.map((f) => f.path).join(", ")}`,
+        why: "New files expand the codebase surface area and may introduce unreviewed dependencies.",
+      });
+      driftScore += newFiles.length * 0.05;
+    }
+
+    // 2. Detect deleted files (structural contraction)
+    const deletedFiles = changedFiles.filter((f) => f.status === "removed");
+    if (deletedFiles.length > 0) {
+      messages.push({
+        rule: "semantic-drift",
+        message: `Files removed: ${deletedFiles.map((f) => f.path).join(", ")}`,
+        why: "Removing files may break existing consumers or remove important behaviour.",
+      });
+      driftScore += deletedFiles.length * 0.05;
+    }
+
+    // 3. Detect file movement (architecture drift)
+    const movedFiles = changedFiles.filter((f) => f.status === "renamed");
+    if (movedFiles.length > 0) {
+      messages.push({
+        rule: "semantic-drift",
+        message: `Files moved: ${movedFiles.map((f) => f.path).join(", ")}`,
+        why: "File renames shift module identities and can silently break imports that reference the old path.",
+      });
+      driftScore += movedFiles.length * 0.1;
+    }
+
+    // 4. Analyse per-file diffs for import/export/structural changes.
+    // Fall back to the top-level diff when fileDiffs is not provided.
+    const diffSource = fileDiffs ?? diff;
+    if (diffSource) {
+      const parsedFiles = parseDiff(diffSource);
+      const changes = analyzeChanges(parsedFiles);
+      for (const msg of changes.messages) {
+        messages.push(msg);
+      }
+      const weighted = changes.importChanges * 2 + changes.exportChanges * 3 + changes.structuralChanges;
+      const fileCount = Math.max(parsedFiles.length, 1);
+      driftScore += Math.min(1, weighted / (fileCount * 5));
+    }
+
+    // 5. Detect dependency graph drift.
+    if (dependencyGraphBefore && dependencyGraphAfter) {
+      const beforeDeps = new Set(Object.keys(dependencyGraphBefore));
+      const afterDeps = new Set(Object.keys(dependencyGraphAfter));
+      const addedDeps = [...afterDeps].filter((d) => !beforeDeps.has(d));
+      const removedDeps = [...beforeDeps].filter((d) => !afterDeps.has(d));
+
+      if (addedDeps.length > 0) {
+        messages.push({
+          rule: "semantic-drift",
+          message: `New dependencies added: ${addedDeps.join(", ")}`,
+          why: "New dependencies expand the attack surface and may introduce license or compatibility risks.",
+        });
+        driftScore += addedDeps.length * 0.1;
+      }
+
+      if (removedDeps.length > 0) {
+        messages.push({
+          rule: "semantic-drift",
+          message: `Dependencies removed: ${removedDeps.join(", ")}`,
+          why: "Removing dependencies may break code that still relies on them.",
+        });
+        driftScore += removedDeps.length * 0.05;
+      }
+    }
+
+    const finalScore = Math.min(1, driftScore);
+    const passed = finalScore < resolvedThreshold;
 
     return {
       passed,
-      driftScore: Math.round(driftScore * 100) / 100,
-      messages: changes.messages,
+      driftScore: Math.round(finalScore * 100) / 100,
+      messages,
     };
   },
 };
