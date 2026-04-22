@@ -12,14 +12,21 @@ inputs:
   diff:
     description: "Optional diff override (defaults to PR diff)"
     required: false
+  contract:
+    description: "Path to the Gatekeeper Governance Contract file (defaults to .gatekeeper/contract.json)"
+    required: false
+    default: ".gatekeeper/contract.json"
+  schema:
+    description: "Path to the Gatekeeper Governance Schema file (defaults to .gatekeeper/schema.json)"
+    required: false
+    default: ".gatekeeper/schema.json"
+  governance_contract:
+    description: "Legacy: Path to the Gatekeeper Governance Contract file. Use 'contract' instead."
+    required: false
   config:
-    description: "Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
+    description: "Legacy: Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
     required: false
     default: ".github/gatekeeper.yml"
-  governance_contract:
-    description: "Path to the Gatekeeper Governance Contract v2 file (defaults to .github/gatekeeper-governance.json)"
-    required: false
-    default: ".github/gatekeeper-governance.json"
   build_baseline:
     description: "When 'true', scan the repository and write a baseline to .gatekeeper/baseline.json instead of running PR checks."
     required: false
@@ -32,6 +39,10 @@ inputs:
     description: "JSON array of per-repo baseline objects (each with 'repo' and 'data' fields) used when build_org_baseline is 'true'."
     required: false
     default: "[]"
+
+outputs:
+  should_block:
+    description: "Whether Gatekeeper recommends blocking the merge. Always 'false' in v1 (advisory mode)."
 
 runs:
   using: "node20"
