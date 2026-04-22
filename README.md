@@ -3,28 +3,52 @@
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Gatekeeper%20by%20Vireon-blue?logo=github)](https://github.com/marketplace/actions/gatekeeper-by-vireon)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Governance-grade enforcement engine for pull requests.  
-Powered by **Vireon**, the Intelligence Engine.
+**Gatekeeper v1** — Constitutional Architecture Governance Engine.
 
-Gatekeeper analyzes every PR, detects architecture drift, identifies regressions, enforces policy, and generates deterministic auto-fixes — all inside GitHub.
+Gatekeeper analyzes every PR, learns your repository's architecture, detects semantic drift, and posts a governance report — all without blocking merges.
 
 ---
 
-## 🚀 Features
+## 🚀 Quick Start
 
-- Multi-layer PR analysis
-- Architecture governance
-- Incident regression detection
-- Deterministic auto-fixing
-- Zero-infrastructure deployment
-- PR comments with risk scoring
-- Fails checks on high-risk changes
+Run the scaffolder to set up Gatekeeper in any repository:
+
+```bash
+npx gatekeeper init
+```
+
+This creates:
+
+```
+.gatekeeper/
+  contract.json   ← Governance Contract (advisory, pr-approved baseline)
+  schema.json     ← Governance Schema
+
+.github/workflows/
+  gatekeeper.yml  ← GitHub Actions workflow
+```
+
+Then open a pull request — Gatekeeper will post your first architecture governance report automatically.
+
+---
+
+## 🧠 What Gatekeeper Does
+
+On every pull request, Gatekeeper:
+
+1. **Loads your Governance Contract** — the constitutional backbone of governance
+2. **Loads or builds your architecture baseline** — learned from the repo itself
+3. **Runs the repo-learning rule pack** — detects naming and boundary drift
+4. **Computes drift-over-time** — longitudinal architecture stability metrics
+5. **Generates an Architecture Health Report** — governance-grade audit
+6. **Renders governance state** — fully visible in the PR comment
+7. **Outputs `should_block`** — always `false` in v1 (advisory-only)
 
 ---
 
 ## 📦 Usage
 
-Add this to your workflow:
+### Minimal workflow (after `npx gatekeeper init`):
 
 ```yaml
 name: Gatekeeper
@@ -33,152 +57,162 @@ on:
   pull_request:
 
 jobs:
-  gatekeeper:
+  governance:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Vireon Gatekeeper
+      - name: Run Gatekeeper
         uses: doctorfixes/vireon-gatekeeper-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          contract: .gatekeeper/contract.json
+          schema: .gatekeeper/schema.json
+```
+
+### With baseline build step (recommended):
+
+```yaml
+name: Gatekeeper
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  baseline:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Baseline
+        uses: doctorfixes/vireon-gatekeeper-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          contract: .gatekeeper/contract.json
+          build_baseline: "true"
+
+  governance:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Gatekeeper
+        uses: doctorfixes/vireon-gatekeeper-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          contract: .gatekeeper/contract.json
+          schema: .gatekeeper/schema.json
 ```
 
 ---
 
 ## 🔧 Inputs
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `token` | ✅ | GitHub token for PR context |
-| `diff` | ❌ | Optional diff override (defaults to PR diff) |
-| `config` | ❌ | Path to config file (defaults to `.github/gatekeeper.yml`) |
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `token` | ✅ | — | GitHub token for PR context |
+| `contract` | ❌ | `.gatekeeper/contract.json` | Path to the Governance Contract |
+| `schema` | ❌ | `.gatekeeper/schema.json` | Path to the Governance Schema |
+| `diff` | ❌ | — | Optional diff override (defaults to PR diff) |
+| `build_baseline` | ❌ | `false` | When `true`, scan the repo and write `.gatekeeper/baseline.json` |
+| `build_org_baseline` | ❌ | `false` | When `true`, aggregate repo baselines into an org-level baseline |
+| `repo_baselines` | ❌ | `[]` | JSON array of per-repo baselines (used with `build_org_baseline`) |
+| `governance_contract` | ❌ | — | Legacy alias for `contract` |
 
 ---
 
-## ⚙️ Configuration
+## 📤 Outputs
 
-Create `.github/gatekeeper.yml` in your repository to customize Gatekeeper's behavior:
+| Name | Description |
+|------|-------------|
+| `should_block` | Whether Gatekeeper recommends blocking the merge. Always `false` in v1 (advisory mode). |
 
-```yaml
-mode: advisory   # "advisory" posts findings as a warning without blocking the PR
-                 # "strict" (default) fails the PR when verdict is "fail"
+---
 
-rules:
-  - semantic-drift
-  - architecture-boundaries
-  - naming-conventions
+## 🏛️ Governance Contract
 
-settings:
-  drift:
-    sensitivity: medium   # low | medium | high
-    threshold: 0.15       # explicit 0.0–1.0 override (takes precedence over sensitivity)
-  comments:
-    summary: true         # include a plain-text summary in the PR comment
-    explain_why: true     # show per-issue "why" explanations in the PR comment
-    max_messages: 10      # cap the number of issues shown in the PR comment
-  architecture:
-    enforce_layers: true
-    allowed_layers:
-      - domain
-      - application
-      - infrastructure
-  naming:
-    enforce_case: true
-    file_case: kebab        # kebab | snake | camel | pascal
-    class_case: pascal
-    variable_case: camel
+The Governance Contract (`.gatekeeper/contract.json`) is the constitutional backbone of Gatekeeper. It defines:
 
-plugins:
-  enabled: []             # reserved for future custom rule modules
+- **Baseline mode** — how the architecture baseline is managed (`pr-approved`, `auto-learn`, `frozen`)
+- **Enforcement mode** — how violations are handled (`advisory`, `hybrid`, `strict`)
+- **Rule packs** — which governance rules are active
+- **Waivers** — what exception mechanisms are allowed
+- **Transparency** — what is surfaced in PR comments
+
+### v1 defaults (created by `npx gatekeeper init`):
+
+```json
+{
+  "version": "1.0.0",
+  "baseline": { "mode": "pr-approved" },
+  "enforcement": { "mode": "advisory", "criticalRules": [] },
+  "rules": { "core": ["repo-learning"], "local": [], "org": [] }
+}
 ```
 
-### `mode`
+---
 
-| Value | Behaviour |
-|-------|-----------|
-| `strict` (default) | PR check fails when verdict is `fail` |
-| `advisory` | Findings are posted as a warning; PR is never blocked |
+## 📋 Rule Packs
 
-### `rules`
+### `repo-learning` (v1 default)
 
-An optional list of rule names to enable. When omitted, all rules configured in the Vireon CLI are used.
+Learns the repository's de-facto architecture and flags PR changes that deviate from it:
 
-| Rule | Description |
-|------|-------------|
-| `semantic-drift` | Detects semantic/meaning drift across the diff |
-| `architecture-boundaries` | Flags changes that violate layering or module boundaries |
-| `naming-conventions` | Enforces consistent identifiers and naming patterns |
+- **Inferred naming violations** — new files that don't match the dominant naming convention
+- **Inferred boundary violations** — new cross-layer dependencies not seen in the baseline
 
-### `settings.drift`
+All findings include explain-why context.
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `sensitivity` | `medium` | Drift aggressiveness: `low`, `medium`, or `high` |
-| `threshold` | _(from sensitivity)_ | Explicit numeric tolerance 0.0–1.0; overrides `sensitivity` when set |
+---
 
-### `settings.comments`
+## 🛡️ Safety & Adoption
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `summary` | `true` | Prepend a plain-text summary to the PR comment |
-| `explain_why` | `false` | Show per-issue explanations rather than raw JSON |
-| `max_messages` | _(unlimited)_ | Maximum number of issues shown in the PR comment |
+Gatekeeper v1 is intentionally:
 
-### `settings.architecture`
-
-Controls the `architecture-boundaries` rule.
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enforce_layers` | `false` | Enable layer-boundary enforcement |
-| `allowed_layers` | `[]` | Ordered list of layer names (innermost first). Inner layers (lower index) cannot import from outer layers (higher index). |
-
-### `settings.naming`
-
-Controls the `naming-conventions` rule.
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enforce_case` | `false` | Enable naming-convention checks |
-| `file_case` | `kebab` | Expected casing for file names: `kebab`, `snake`, `camel`, or `pascal` |
-| `class_case` | `pascal` | Expected casing for class/interface names |
-| `variable_case` | `camel` | Expected casing for variable/const/let names |
-
-### `plugins`
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `enabled` | `[]` | Reserved for future custom rule modules |
+- **Advisory-only** — never blocks merges
+- **Non-intrusive** — posts a comment, nothing more
+- **Non-enforcing** — `should_block` is always `false`
+- **Reversible** — governance contract can be changed or removed at any time
+- **Transparent** — all governance state is visible in every PR comment
 
 ---
 
 ## 🔐 Permissions
 
-Add this block to your workflow file to grant the required permissions. The `action.yml` lists them for reference, but permissions must be declared in your workflow:
+Declare these in your workflow:
 
 ```yaml
 permissions:
   contents: read
   pull-requests: write
-  checks: write
 ```
 
 ---
 
-## 🛡️ Output
+## 🕊️ Waivers & Exceptions
 
-Gatekeeper posts a PR comment containing:
+Add PR labels to control governance behavior:
 
-- Risk score
-- Verdict
-- Issues detected
-- Auto-fix suggestions (if available)
-
-If the verdict is `fail`, the workflow fails.
+| Label | Effect |
+|-------|--------|
+| `gatekeeper-waive:<rule-id>` | Waive a specific rule for this PR |
+| `gatekeeper-waive:<Nd>` | Time-boxed waiver (e.g. `gatekeeper-waive:7d`) |
+| `gatekeeper-baseline-freeze` | Pause baseline updates for this PR |
+| `gatekeeper-emergency-override` | Suspend all enforcement (org-level emergency) |
 
 ---
 
 ## 📄 License
 
 [MIT](LICENSE) © Vireon
+

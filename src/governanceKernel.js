@@ -29,7 +29,9 @@ async function runGovernanceKernel({
   const history = loadHistory();
 
   // 3. Build baseline if missing and allowed
-  if (!baseline && contract.baseline.mode !== 'frozen') {
+  // Only attempt auto-build when allFiles is available in the context (i.e. the
+  // caller is the baseline-build step, not a PR analysis run).
+  if (!baseline && contract.baseline.mode !== 'frozen' && Array.isArray(context.allFiles)) {
     const inferred = await buildBaseline(context);
     baseline = saveBaseline(inferred, context.commitHash);
   }

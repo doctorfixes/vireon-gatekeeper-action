@@ -4,6 +4,9 @@
   "description": "GitHub Action wrapper for Vireon Gatekeeper, the governance-grade enforcement engine.",
   "main": "index.js",
   "type": "module",
+  "bin": {
+    "gatekeeper": "bin/gatekeeper-init.js"
+  },
   "scripts": {
     "test": "echo \"No tests yet\""
   },
