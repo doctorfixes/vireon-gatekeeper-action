@@ -176,9 +176,7 @@ export default {
           message: `New dependencies in "${file}": ${added.join(", ")}`,
           why: "Adding new import dependencies increases coupling and can signal architectural drift.",
         });
-        added.forEach((dep) => {
-          findings.push({ type: "dependency_change", detail: `"${file}" added dependency on "${dep}"` });
-        });
+        findings.push(...added.map((dep) => ({ type: "dependency_change", detail: `"${file}" added dependency on "${dep}"` })));
         driftScore += added.length * DRIFT_WEIGHTS.dependencyAdded;
       }
 
@@ -188,9 +186,7 @@ export default {
           message: `Removed dependencies in "${file}": ${removed.join(", ")}`,
           why: "Removing import dependencies may indicate dead code removal or breaking interface changes.",
         });
-        removed.forEach((dep) => {
-          findings.push({ type: "dependency_change", detail: `"${file}" removed dependency on "${dep}"` });
-        });
+        findings.push(...removed.map((dep) => ({ type: "dependency_change", detail: `"${file}" removed dependency on "${dep}"` })));
         driftScore += removed.length * DRIFT_WEIGHTS.dependencyRemoved;
       }
     }
