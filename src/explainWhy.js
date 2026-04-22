@@ -69,6 +69,18 @@ function explainFinding(finding) {
         `How to fix: Update the code to comply with the rule-defined convention documented in your Gatekeeper configuration.`,
       ].join(" ");
 
+    case "inferred_boundary_violation":
+      return [
+        `Why this matters: This dependency direction was not observed in the baseline architecture scan, meaning it introduces a cross-layer coupling that the repo has never had before.`,
+        `How to fix: Route the dependency through the appropriate layer interface, or run a new baseline build if this direction is intentional and should be permitted going forward.`,
+      ].join(" ");
+
+    case "inferred_naming_violation":
+      return [
+        `Why this matters: The inferred naming convention was learned from the existing codebase. Deviating from it reduces consistency and makes the new file harder to discover.`,
+        `How to fix: Rename the file to match the dominant naming pattern detected in the baseline, or rebuild the baseline if the convention has intentionally changed.`,
+      ].join(" ");
+
     default:
       return null;
   }

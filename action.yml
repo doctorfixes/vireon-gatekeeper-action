@@ -16,6 +16,10 @@ inputs:
     description: "Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
     required: false
     default: ".github/gatekeeper.yml"
+  build_baseline:
+    description: "When 'true', scan the repository and write a baseline to .gatekeeper/baseline.json instead of running PR checks."
+    required: false
+    default: "false"
 
 runs:
   using: "node20"

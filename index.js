@@ -9,6 +9,7 @@ import namingConventions from "./checks/naming-conventions.js";
 import { loadConfig } from "./src/loadConfig.js";
 import { runRules } from "./src/runRules.js";
 import { explainResults } from "./src/explainWhy.js";
+import { buildBaselineFromRepo } from "./src/inferenceEngine.js";
 
 const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
 const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
@@ -105,6 +106,18 @@ async function run() {
     const token = core.getInput("token");
     const octokit = github.getOctokit(token);
     const configPath = core.getInput("config") || ".github/gatekeeper.yml";
+
+    // ── Baseline-build mode ────────────────────────────────────────────────
+    if (core.getInput("build_baseline") === "true") {
+      core.info("Inference engine: scanning repository to build baseline…");
+      const baseline = buildBaselineFromRepo(".");
+      core.info(`Baseline written to .gatekeeper/baseline.json`);
+      core.info(`Inferred layers: ${baseline.layers.join(", ") || "(none)"}`);
+      core.info(`Inferred naming: ${baseline.naming.file_case}`);
+      const edgeCount = Object.keys(baseline.boundaries.edges).length;
+      core.info(`Inferred boundary edges: ${edgeCount}`);
+      return;
+    }
 
     const config = loadConfig(configPath);
     core.info(`Gatekeeper mode: ${config.mode}`);
