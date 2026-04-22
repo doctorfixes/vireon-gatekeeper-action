@@ -20,6 +20,14 @@ inputs:
     description: "When 'true', scan the repository and write a baseline to .gatekeeper/baseline.json instead of running PR checks."
     required: false
     default: "false"
+  build_org_baseline:
+    description: "When 'true', aggregate repo baselines from the 'repo_baselines' input into an org-level baseline under .gatekeeper-org/."
+    required: false
+    default: "false"
+  repo_baselines:
+    description: "JSON array of per-repo baseline objects (each with 'repo' and 'data' fields) used when build_org_baseline is 'true'."
+    required: false
+    default: "[]"
 
 runs:
   using: "node20"
