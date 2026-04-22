@@ -8,6 +8,7 @@ import architectureBoundaries from "./checks/architecture-boundaries.js";
 import namingConventions from "./checks/naming-conventions.js";
 import { loadConfig } from "./src/loadConfig.js";
 import { runRules } from "./src/runRules.js";
+import { explainResults } from "./src/explainWhy.js";
 
 const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
 const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
@@ -151,10 +152,11 @@ async function run() {
           architecture: config.settings.architecture,
           naming: config.settings.naming,
         };
-        const [nativeResult, customResults] = await Promise.all([
+        const [nativeResult, rawCustomResults] = await Promise.all([
           Promise.resolve(runNativeChecks(diffText, config)),
           runRules(config, context, NATIVE_IDS),
         ]);
+        const customResults = explainResults(rawCustomResults, config);
         const customIssues = [];
         for (const r of customResults) {
           for (const msg of r.messages) {

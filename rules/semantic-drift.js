@@ -161,6 +161,8 @@ export default {
       ...Object.keys(dependencyGraphAfter),
     ]);
 
+    const findings = [];
+
     for (const file of allFiles) {
       const before = new Set(dependencyGraphBefore[file] || []);
       const after = new Set(dependencyGraphAfter[file] || []);
@@ -174,6 +176,7 @@ export default {
           message: `New dependencies in "${file}": ${added.join(", ")}`,
           why: "Adding new import dependencies increases coupling and can signal architectural drift.",
         });
+        findings.push(...added.map((dep) => ({ type: "dependency_change", detail: `"${file}" added dependency on "${dep}"` })));
         driftScore += added.length * DRIFT_WEIGHTS.dependencyAdded;
       }
 
@@ -183,9 +186,15 @@ export default {
           message: `Removed dependencies in "${file}": ${removed.join(", ")}`,
           why: "Removing import dependencies may indicate dead code removal or breaking interface changes.",
         });
+        findings.push(...removed.map((dep) => ({ type: "dependency_change", detail: `"${file}" removed dependency on "${dep}"` })));
         driftScore += removed.length * DRIFT_WEIGHTS.dependencyRemoved;
       }
     }
+
+    // File moves signal potential architecture boundary drift.
+    movedFiles.forEach((f) => {
+      findings.push({ type: "boundary_violation", detail: `"${f.fromPath}" moved to "${f.path}"` });
+    });
 
     const normalizedScore = Math.min(1, Math.round(driftScore * 100) / 100);
     const passed = normalizedScore < resolvedThreshold;
@@ -194,6 +203,9 @@ export default {
       passed,
       driftScore: normalizedScore,
       messages,
+      metadata: {
+        findings,
+      },
     };
   },
 };
