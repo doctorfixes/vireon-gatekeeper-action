@@ -16,6 +16,8 @@ export function loadConfig(configPath) {
     plugins: { enabled: [] },
     governance: {
       baseline_mode: "pr-approved",
+      contract_version: "v1",
+      rule_authority: "local",
       drift: { thresholds: { ...DEFAULT_THRESHOLDS } },
       enforcement: { hybrid_critical_rules: [] },
     },
@@ -83,6 +85,8 @@ function parseGovernanceConfig(pg, dg) {
   const dt = dg.drift.thresholds;
   return {
     baseline_mode: normaliseBaselineMode(pg?.baseline_mode ?? dg.baseline_mode),
+    contract_version: typeof pg?.contract_version === "string" ? pg.contract_version : dg.contract_version,
+    rule_authority: typeof pg?.rule_authority === "string" ? pg.rule_authority : dg.rule_authority,
     drift: {
       thresholds: {
         low:      typeof rawThresholds.low      === "number" ? rawThresholds.low      : dt.low,

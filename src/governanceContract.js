@@ -87,4 +87,138 @@ function normaliseBaselineMode(mode) {
   return BASELINE_MODES.has(mode) ? mode : 'pr-approved';
 }
 
-export { classifyDrift, shouldBlockMerge, driftLevelLabel, normaliseBaselineMode, DEFAULT_THRESHOLDS };
+/**
+ * Governance Contract Renderer
+ * Renders the governance contract state into a PR comment.
+ *
+ * @param {Object} contract - The governance contract object (reserved for future use).
+ * @param {Object} state - Current governance state.
+ * @param {'strict'|'advisory'|'hybrid'} state.enforcementMode
+ * @param {'frozen'|'pr-approved'|'auto-learn'} state.baselineMode
+ * @param {'core'|'local'|'org'} state.ruleAuthority
+ * @param {{ active: boolean, items: Array<{rule: string, expires: string}> }} state.waiverStatus
+ * @param {string} state.contractVersion
+ * @param {boolean} state.baselineFrozen
+ * @param {boolean} state.baselinePendingUpdate
+ * @returns {string} Markdown string for use in a PR comment.
+ */
+function renderGovernanceContract(contract, state) {
+  const {
+    enforcementMode,
+    baselineMode,
+    ruleAuthority,
+    waiverStatus,
+    contractVersion,
+    baselineFrozen,
+    baselinePendingUpdate
+  } = state;
+
+  return `
+### 🏛️ Gatekeeper Governance Contract
+
+**Contract Version:** \`${contractVersion}\`  
+**Enforcement Mode:** \`${enforcementMode}\`  
+**Baseline Mode:** \`${baselineMode}\`  
+**Baseline Frozen:** \`${baselineFrozen ? "yes" : "no"}\`  
+**Pending Baseline Update:** \`${baselinePendingUpdate ? "yes" : "no"}\`  
+**Waivers Active:** \`${waiverStatus.active ? "yes" : "no"}\`  
+**Rule Authority:** \`${ruleAuthority}\`
+
+---
+
+## 🔐 Governance Authority Model
+
+- **Repo Maintainers:**  
+  Can approve baseline updates, rule changes, waivers, and freezes.
+
+- **Org Governance Group:**  
+  Controls org‑level baselines, org rule packs, and cross‑repo governance.
+
+- **Gatekeeper Engine:**  
+  Executes rules, computes drift, generates reports.  
+  **Cannot modify governance without human approval.**
+
+---
+
+## 🧱 Baseline Governance
+
+**Baseline Mode:** \`${baselineMode}\`
+
+- **frozen** — no learning, no updates, enforcement only  
+- **pr-approved** — Gatekeeper proposes updates, humans approve  
+- **auto-learn** — Gatekeeper updates baseline automatically  
+
+**Current State:**  
+${baselineFrozen ? "🔒 Baseline is frozen" : "🟢 Baseline is active"}
+
+${
+  baselinePendingUpdate
+    ? "⚠️ A baseline update is pending human approval."
+    : "No pending baseline updates."
+}
+
+---
+
+## 📜 Rule Pack Governance
+
+**Authority:** \`${ruleAuthority}\`
+
+- **core** — only maintainers/org governance may modify  
+- **local** — repo maintainers may modify  
+- **org** — org governance only  
+
+Gatekeeper will **never** enforce a rule pack that exceeds its authority.
+
+---
+
+## 🛡️ Enforcement Contract
+
+**Mode:** \`${enforcementMode}\`
+
+- **strict** — violations block merges  
+- **advisory** — violations surface but do not block  
+- **hybrid** — critical rules strict, others advisory  
+
+Gatekeeper will **never** silently escalate enforcement.
+
+---
+
+## 🕊️ Waiver & Exception System
+
+**Waivers Active:** \`${waiverStatus.active ? "yes" : "no"}\`
+
+${
+  waiverStatus.active
+    ? waiverStatus.items
+        .map(w => `- \`${w.rule}\` — expires ${w.expires}`)
+        .join("\n")
+    : "_No waivers currently active._"
+}
+
+Waiver Types:
+- file‑level ignore (`.gatekeeper-ignore`)  
+- rule‑level waiver (`gatekeeper-waive:rule-id`)  
+- time‑boxed waiver (`gatekeeper-waive:7d`)  
+- baseline freeze (`gatekeeper-baseline-freeze`)  
+
+---
+
+## 🔍 Transparency & Reversibility
+
+Gatekeeper guarantees:
+
+- no silent baseline updates  
+- no silent rule changes  
+- no silent enforcement changes  
+- all governance actions logged  
+- all governance actions reversible  
+
+This renderer ensures governance is **visible, explainable, and auditable**.
+
+---
+
+Gatekeeper — deterministic, explainable, reversible governance for modern codebases.
+`;
+}
+
+export { classifyDrift, shouldBlockMerge, driftLevelLabel, normaliseBaselineMode, DEFAULT_THRESHOLDS, renderGovernanceContract };
