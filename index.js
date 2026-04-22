@@ -110,8 +110,10 @@ async function run() {
     // ── Baseline-build mode ────────────────────────────────────────────────
     if (core.getInput("build_baseline") === "true") {
       core.info("Inference engine: scanning repository to build baseline…");
-      const baseline = buildBaselineFromRepo(".");
+      const commitHash = github.context.sha || null;
+      const baseline = buildBaselineFromRepo(".", commitHash);
       core.info(`Baseline written to .gatekeeper/baseline.json`);
+      core.info(`Baseline history updated in .gatekeeper/history.json`);
       core.info(`Inferred layers: ${baseline.layers.join(", ") || "(none)"}`);
       core.info(`Inferred naming: ${baseline.naming.file_case}`);
       const edgeCount = Object.keys(baseline.boundaries.edges).length;
