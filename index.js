@@ -31,6 +31,9 @@ const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
 const RISK_SCORE_PER_ISSUE = 20;
 const MAX_RISK_SCORE = 100;
 
+// Fallback baseline used when no persisted baseline exists yet.
+const EMPTY_BASELINE = { layers: [], naming: { file_case: "kebab" }, boundaries: { edges: {} } };
+
 function runNativeChecks(diffText, config) {
   const activeRules = new Set(config.rules.length > 0 ? config.rules : NATIVE_CHECKS.map((c) => c.id));
   const context = {
@@ -373,19 +376,21 @@ async function run() {
     };
 
     // ── Architecture Health Report ─────────────────────────────────────────
-    const baselineSnapshot = loadBaselineData();
-    const historySnapshots = loadHistoryData();
+    let baselineSnapshot = null;
+    let historySnapshots = [];
+    try {
+      baselineSnapshot = loadBaselineData();
+      historySnapshots = loadHistoryData() ?? [];
+    } catch (err) {
+      core.warning(`Architecture Health Report: failed to load baseline data — ${err.message}`);
+    }
     const driftOverTime = computeDriftOverTime(historySnapshots);
     const recentFindings = activeIssues.map((i) => ({
       type: i.rule || "issue",
-      detail: i.message || JSON.stringify(i),
+      detail: i.message || `Issue from rule '${i.rule ?? "unknown"}'`,
     }));
     const healthReport = generateArchitectureHealthReport({
-      baseline: (baselineSnapshot?.data ?? baselineSnapshot) || {
-        layers: [],
-        naming: { file_case: "kebab" },
-        boundaries: { edges: {} },
-      },
+      baseline: (baselineSnapshot?.data ?? baselineSnapshot) ?? EMPTY_BASELINE,
       history: historySnapshots,
       driftOverTime,
       recentFindings,
