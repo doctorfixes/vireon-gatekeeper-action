@@ -16,6 +16,10 @@ inputs:
     description: "Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
     required: false
     default: ".github/gatekeeper.yml"
+  governance_contract:
+    description: "Path to the Gatekeeper Governance Contract v2 file (defaults to .github/gatekeeper-governance.json)"
+    required: false
+    default: ".github/gatekeeper-governance.json"
   build_baseline:
     description: "When 'true', scan the repository and write a baseline to .gatekeeper/baseline.json instead of running PR checks."
     required: false

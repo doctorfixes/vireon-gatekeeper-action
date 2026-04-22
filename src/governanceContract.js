@@ -1,12 +1,13 @@
 /**
  * Governance Contract
  * Implements the constitutional layer for deterministic, explainable, reversible
- * governance as defined in the Gatekeeper Governance Contract (v1).
+ * governance as defined in the Gatekeeper Governance Contract (v2).
  *
  * Responsibilities:
  *   - Drift classification (Low / Moderate / High / Critical)
  *   - Blocking decision per enforcement mode (strict / advisory / hybrid)
  *   - Baseline mode validation (frozen / pr-approved / auto-learn)
+ *   - Governance contract enforcement (authority, waivers, org governance)
  */
 
 /** @type {Object} Default risk-score thresholds (0-100 scale) per drift level. */
@@ -89,9 +90,11 @@ function normaliseBaselineMode(mode) {
 
 /**
  * Governance Contract Renderer
- * Renders the governance contract state into a PR comment.
+ * Renders the governance contract state into a PR comment section.
+ * Sections are shown or hidden according to the contract's transparency settings.
  *
- * @param {Object} contract - The governance contract object (reserved for future use).
+ * @param {Object|null} contract - The loaded governance contract (v2 schema).  Pass
+ *   `null` to render all sections (backward-compatible default).
  * @param {Object} state - Current governance state.
  * @param {'strict'|'advisory'|'hybrid'} state.enforcementMode
  * @param {'frozen'|'pr-approved'|'auto-learn'} state.baselineMode
@@ -113,127 +116,168 @@ function renderGovernanceContract(contract, state) {
     baselinePendingUpdate
   } = state;
 
-  return `
-### 🏛️ Gatekeeper Governance Contract
+  // Transparency flags — default all true when no contract is supplied.
+  const t = contract?.transparency ?? {};
+  const showGovernanceState = t.showGovernanceState !== false;
+  const showBaselineState   = t.showBaselineState   !== false;
+  const showWaivers         = t.showWaivers         !== false;
+  const showAuthority       = t.showAuthority       !== false;
 
-**Contract Version:** \`${contractVersion}\`  
-**Enforcement Mode:** \`${enforcementMode}\`  
-**Baseline Mode:** \`${baselineMode}\`  
-**Baseline Frozen:** \`${baselineFrozen ? "yes" : "no"}\`  
-**Pending Baseline Update:** \`${baselinePendingUpdate ? "yes" : "no"}\`  
-**Waivers Active:** \`${waiverStatus.active ? "yes" : "no"}\`  
-**Rule Authority:** \`${ruleAuthority}\`
+  const sections = [];
 
----
+  sections.push(`### 🏛️ Gatekeeper Governance Contract`);
+  sections.push('');
 
-## 🔐 Governance Authority Model
+  if (showGovernanceState) {
+    sections.push(
+      `**Contract Version:** \`${contractVersion}\`  `,
+      `**Enforcement Mode:** \`${enforcementMode}\`  `,
+      `**Baseline Mode:** \`${baselineMode}\`  `,
+      `**Baseline Frozen:** \`${baselineFrozen ? "yes" : "no"}\`  `,
+      `**Pending Baseline Update:** \`${baselinePendingUpdate ? "yes" : "no"}\`  `,
+      `**Waivers Active:** \`${waiverStatus.active ? "yes" : "no"}\`  `,
+      `**Rule Authority:** \`${ruleAuthority}\``,
+      '',
+      '---',
+      ''
+    );
+  }
 
-- **Repo Maintainers:**  
-  Can approve baseline updates, rule changes, waivers, and freezes.
+  if (showAuthority) {
+    sections.push(
+      `## 🔐 Governance Authority Model`,
+      '',
+      `- **Repo Maintainers:**  `,
+      `  Can approve baseline updates, rule changes, waivers, and freezes.`,
+      '',
+      `- **Org Governance Group:**  `,
+      `  Controls org‑level baselines, org rule packs, and cross‑repo governance.`,
+      '',
+      `- **Gatekeeper Engine:**  `,
+      `  Executes rules, computes drift, generates reports.  `,
+      `  **Cannot modify governance without human approval.**`,
+      '',
+      '---',
+      ''
+    );
+  }
 
-- **Org Governance Group:**  
-  Controls org‑level baselines, org rule packs, and cross‑repo governance.
+  if (showBaselineState) {
+    sections.push(
+      `## 🧱 Baseline Governance`,
+      '',
+      `**Baseline Mode:** \`${baselineMode}\``,
+      '',
+      `- **frozen** — no learning, no updates, enforcement only  `,
+      `- **pr-approved** — Gatekeeper proposes updates, humans approve  `,
+      `- **auto-learn** — Gatekeeper updates baseline automatically  `,
+      '',
+      `**Current State:**  `,
+      baselineFrozen ? `🔒 Baseline is frozen` : `🟢 Baseline is active`,
+      '',
+      baselinePendingUpdate
+        ? `⚠️ A baseline update is pending human approval.`
+        : `No pending baseline updates.`,
+      '',
+      '---',
+      '',
+      `## 📜 Rule Pack Governance`,
+      '',
+      `**Authority:** \`${ruleAuthority}\``,
+      '',
+      `- **core** — only maintainers/org governance may modify  `,
+      `- **local** — repo maintainers may modify  `,
+      `- **org** — org governance only  `,
+      '',
+      `Gatekeeper will **never** enforce a rule pack that exceeds its authority.`,
+      '',
+      '---',
+      '',
+      `## 🛡️ Enforcement Contract`,
+      '',
+      `**Mode:** \`${enforcementMode}\``,
+      '',
+      `- **strict** — violations block merges  `,
+      `- **advisory** — violations surface but do not block  `,
+      `- **hybrid** — critical rules strict, others advisory  `,
+      '',
+      `Gatekeeper will **never** silently escalate enforcement.`,
+      '',
+      '---',
+      ''
+    );
+  }
 
-- **Gatekeeper Engine:**  
-  Executes rules, computes drift, generates reports.  
-  **Cannot modify governance without human approval.**
+  if (showWaivers) {
+    const waiverLines = waiverStatus.active
+      ? waiverStatus.items.map(w => `- \`${w.rule}\` — expires ${w.expires}`).join('\n')
+      : '_No waivers currently active._';
 
----
+    sections.push(
+      `## 🕊️ Waiver & Exception System`,
+      '',
+      `**Waivers Active:** \`${waiverStatus.active ? "yes" : "no"}\``,
+      '',
+      waiverLines,
+      '',
+      `Waiver Types:`,
+      `- file‑level ignore (\`.gatekeeper-ignore\`)  `,
+      `- rule‑level waiver (\`gatekeeper-waive:rule-id\`)  `,
+      `- time‑boxed waiver (\`gatekeeper-waive:7d\`)  `,
+      `- baseline freeze (\`gatekeeper-baseline-freeze\`)  `,
+      '',
+      '---',
+      ''
+    );
+  }
 
-## 🧱 Baseline Governance
+  sections.push(
+    `## 🔍 Transparency & Reversibility`,
+    '',
+    `Gatekeeper guarantees:`,
+    '',
+    `- no silent baseline updates  `,
+    `- no silent rule changes  `,
+    `- no silent enforcement changes  `,
+    `- all governance actions logged  `,
+    `- all governance actions reversible  `,
+    '',
+    `This renderer ensures governance is **visible, explainable, and auditable**.`,
+    '',
+    '---',
+    '',
+    `Gatekeeper — deterministic, explainable, reversible governance for modern codebases.`,
+    ''
+  );
 
-**Baseline Mode:** \`${baselineMode}\`
-
-- **frozen** — no learning, no updates, enforcement only  
-- **pr-approved** — Gatekeeper proposes updates, humans approve  
-- **auto-learn** — Gatekeeper updates baseline automatically  
-
-**Current State:**  
-${baselineFrozen ? "🔒 Baseline is frozen" : "🟢 Baseline is active"}
-
-${
-  baselinePendingUpdate
-    ? "⚠️ A baseline update is pending human approval."
-    : "No pending baseline updates."
-}
-
----
-
-## 📜 Rule Pack Governance
-
-**Authority:** \`${ruleAuthority}\`
-
-- **core** — only maintainers/org governance may modify  
-- **local** — repo maintainers may modify  
-- **org** — org governance only  
-
-Gatekeeper will **never** enforce a rule pack that exceeds its authority.
-
----
-
-## 🛡️ Enforcement Contract
-
-**Mode:** \`${enforcementMode}\`
-
-- **strict** — violations block merges  
-- **advisory** — violations surface but do not block  
-- **hybrid** — critical rules strict, others advisory  
-
-Gatekeeper will **never** silently escalate enforcement.
-
----
-
-## 🕊️ Waiver & Exception System
-
-**Waivers Active:** \`${waiverStatus.active ? "yes" : "no"}\`
-
-${
-  waiverStatus.active
-    ? waiverStatus.items
-        .map(w => `- \`${w.rule}\` — expires ${w.expires}`)
-        .join("\n")
-    : "_No waivers currently active._"
-}
-
-Waiver Types:
-- file‑level ignore (`.gatekeeper-ignore`)  
-- rule‑level waiver (`gatekeeper-waive:rule-id`)  
-- time‑boxed waiver (`gatekeeper-waive:7d`)  
-- baseline freeze (`gatekeeper-baseline-freeze`)  
-
----
-
-## 🔍 Transparency & Reversibility
-
-Gatekeeper guarantees:
-
-- no silent baseline updates  
-- no silent rule changes  
-- no silent enforcement changes  
-- all governance actions logged  
-- all governance actions reversible  
-
-This renderer ensures governance is **visible, explainable, and auditable**.
-
----
-
-Gatekeeper — deterministic, explainable, reversible governance for modern codebases.
-`;
+  return '\n' + sections.join('\n');
 }
 
 /**
- * Governance Contract Enforcement Engine
+ * Governance Contract Enforcement Engine (v2)
  * Ensures all governance actions comply with the Governance Contract.
  *
- * @param {Object} contract - The governance contract definition.
- * @param {string[]} contract.enforcement.modes - Allowed enforcement modes.
- * @param {string[]} contract.baseline.modes - Allowed baseline modes.
+ * The `contract` parameter must conform to the v2 schema
+ * (`schemas/governance-contract.v2.schema.json`).  Use
+ * `loadGovernanceContract()` from `src/loadGovernanceContract.js` to obtain a
+ * fully normalised contract object.
+ *
+ * @param {Object} contract - The v2 governance contract.
+ * @param {Object} contract.enforcement
+ * @param {string} contract.enforcement.mode - The required enforcement mode.
+ * @param {string[]} contract.enforcement.criticalRules - Rules that are always critical.
+ * @param {Object} contract.baseline
+ * @param {string} contract.baseline.mode - The required baseline mode.
+ * @param {boolean} [contract.baseline.freezeEnabled] - Whether the baseline freeze is active.
+ * @param {Object} contract.waivers
+ * @param {string[]} contract.waivers.allowedTypes - Permitted waiver types.
+ * @param {number}  contract.waivers.maxDurationDays - Maximum waiver duration in days.
  * @param {Object} state - Current governance state.
  * @param {string} state.enforcementMode - Active enforcement mode.
  * @param {string} state.baselineMode - Active baseline mode.
  * @param {boolean} state.baselineFrozen - Whether the baseline is frozen.
  * @param {{ canUpdateBaseline: boolean, canModifyRulePacks: string[], canChangeEnforcementMode: boolean, canModifyOrgGovernance: boolean }} state.authority
- * @param {{ items: Array<{rule: string, expires: string}> }} state.waiverStatus
+ * @param {{ items: Array<{rule: string, expires: string, type?: string, durationDays?: number}> }} state.waiverStatus
  * @param {Object} context - Context for the proposed governance action.
  * @param {boolean} [context.proposedBaselineUpdate] - Whether a baseline update is proposed.
  * @param {Array<{id: string, scope: string}>} context.ruleChanges - Proposed rule pack changes.
@@ -245,21 +289,22 @@ function enforceGovernanceContract(contract, state, context) {
   const violations = [];
 
   // 1. Enforcement Mode Protection
-  if (!contract.enforcement.modes.includes(state.enforcementMode)) {
+  if (state.enforcementMode !== contract.enforcement.mode) {
     violations.push(
-      `Illegal enforcement mode: ${state.enforcementMode}. Allowed: ${contract.enforcement.modes.join(', ')}`
+      `Illegal enforcement mode: ${state.enforcementMode}. Contract requires: ${contract.enforcement.mode}`
     );
   }
 
   // 2. Baseline Mode Protection
-  if (!contract.baseline.modes.includes(state.baselineMode)) {
+  if (state.baselineMode !== contract.baseline.mode) {
     violations.push(
-      `Illegal baseline mode: ${state.baselineMode}. Allowed: ${contract.baseline.modes.join(', ')}`
+      `Illegal baseline mode: ${state.baselineMode}. Contract requires: ${contract.baseline.mode}`
     );
   }
 
-  // 3. Baseline Freeze Enforcement
-  if (state.baselineFrozen && context.proposedBaselineUpdate) {
+  // 3. Baseline Freeze Enforcement (explicit freeze flag or contract-level freeze)
+  const baselineFrozen = state.baselineFrozen || (contract.baseline.freezeEnabled === true);
+  if (baselineFrozen && context.proposedBaselineUpdate) {
     violations.push(
       `Baseline is frozen — baseline updates are not permitted until freeze is lifted.`
     );
@@ -288,11 +333,31 @@ function enforceGovernanceContract(contract, state, context) {
     );
   }
 
-  // 7. Waiver Validation
+  // 7. Waiver Validation — expiry and allowed types
+  const allowedWaiverTypes = contract.waivers?.allowedTypes ?? [];
+  const maxDurationDays = typeof contract.waivers?.maxDurationDays === 'number'
+    ? contract.waivers.maxDurationDays
+    : 30;
+
   (state.waiverStatus?.items ?? []).forEach(w => {
+    // Expiry check
     const expiry = new Date(w.expires).getTime();
     if (!Number.isNaN(expiry) && Date.now() > expiry) {
       violations.push(`Expired waiver detected: ${w.rule}`);
+    }
+
+    // Allowed type check
+    if (w.type && !allowedWaiverTypes.includes(w.type)) {
+      violations.push(
+        `Waiver type '${w.type}' for rule '${w.rule}' is not permitted by the governance contract.`
+      );
+    }
+
+    // Max duration check
+    if (typeof w.durationDays === 'number' && w.durationDays > maxDurationDays) {
+      violations.push(
+        `Waiver for '${w.rule}' exceeds the maximum allowed duration of ${maxDurationDays} days (got ${w.durationDays}).`
+      );
     }
   });
 
