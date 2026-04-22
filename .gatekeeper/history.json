@@ -1,0 +1,9 @@
+[
+  {
+    "createdAt": "2026-04-22T05:52:51.860Z",
+    "commitHash": "abc123",
+    "summary": "Baseline inferred (minimal v1)",
+    "layers": [],
+    "modules": []
+  }
+]

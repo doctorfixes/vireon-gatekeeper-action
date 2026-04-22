@@ -1,54 +1,17 @@
-name: "Gatekeeper by Vireon"
-description: "Governance-grade enforcement engine for pull requests. Powered by Vireon, the Intelligence Engine."
-author: "Vireon"
-branding:
-  icon: shield
-  color: blue
-
-inputs:
-  token:
-    description: "GitHub token for PR context"
-    required: true
-  diff:
-    description: "Optional diff override (defaults to PR diff)"
-    required: false
-  contract:
-    description: "Path to the Gatekeeper Governance Contract file (defaults to .gatekeeper/contract.json)"
-    required: false
-    default: ".gatekeeper/contract.json"
-  schema:
-    description: "Path to the Gatekeeper Governance Schema file (defaults to .gatekeeper/schema.json)"
-    required: false
-    default: ".gatekeeper/schema.json"
-  governance_contract:
-    description: "Legacy: Path to the Gatekeeper Governance Contract file. Use 'contract' instead."
-    required: false
-  config:
-    description: "Legacy: Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
-    required: false
-    default: ".github/gatekeeper.yml"
-  build_baseline:
-    description: "When 'true', scan the repository and write a baseline to .gatekeeper/baseline.json instead of running PR checks."
-    required: false
-    default: "false"
-  build_org_baseline:
-    description: "When 'true', aggregate repo baselines from the 'repo_baselines' input into an org-level baseline under .gatekeeper-org/."
-    required: false
-    default: "false"
-  repo_baselines:
-    description: "JSON array of per-repo baseline objects (each with 'repo' and 'data' fields) used when build_org_baseline is 'true'."
-    required: false
-    default: "[]"
-
-outputs:
-  should_block:
-    description: "Whether Gatekeeper recommends blocking the merge. Always 'false' in v1 (advisory mode)."
-
+name: "Gatekeeper Governance Kernel"
+description: "Runs the Gatekeeper architecture governance engine on pull requests."
 runs:
   using: "node20"
   main: "index.js"
 
-permissions:
-  contents: read
-  pull-requests: write
-  checks: write
+inputs:
+  contract:
+    description: "Path to governance contract"
+    required: true
+  schema:
+    description: "Path to governance schema"
+    required: true
+
+outputs:
+  should_block:
+    description: "Whether the PR should be blocked (always false in v1)"

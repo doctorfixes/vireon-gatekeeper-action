@@ -1,67 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Gatekeeper Governance Contract Schema v2",
+  "title": "Gatekeeper Governance Contract Schema (Minimal v1)",
   "type": "object",
-
   "properties": {
-    "version": {
-      "type": "string",
-      "description": "Governance contract version identifier."
-    },
-
+    "version": { "type": "string" },
     "authority": {
       "type": "object",
-      "description": "Defines who can modify governance state.",
       "properties": {
         "repoMaintainers": { "type": "array", "items": { "type": "string" } },
         "orgGovernanceGroup": { "type": "array", "items": { "type": "string" } },
         "engine": {
           "type": "object",
           "properties": {
-            "canModifyGovernance": { "type": "boolean", "const": false },
-            "canProposeBaselineUpdates": { "type": "boolean", "default": true }
-          }
+            "canModifyGovernance": { "type": "boolean" },
+            "canProposeBaselineUpdates": { "type": "boolean" }
+          },
+          "required": ["canModifyGovernance", "canProposeBaselineUpdates"]
         }
       },
       "required": ["repoMaintainers", "orgGovernanceGroup", "engine"]
     },
-
     "baseline": {
       "type": "object",
-      "description": "Baseline governance policy.",
       "properties": {
-        "mode": {
-          "type": "string",
-          "enum": ["frozen", "pr-approved", "auto-learn"]
-        },
-        "freezeEnabled": { "type": "boolean", "default": false },
-        "updatePolicy": {
-          "type": "string",
-          "enum": ["manual", "pr-approved", "auto"]
-        }
+        "mode": { "type": "string", "enum": ["pr-approved"] },
+        "freezeEnabled": { "type": "boolean" },
+        "updatePolicy": { "type": "string", "enum": ["pr-approved"] }
       },
       "required": ["mode", "updatePolicy"]
     },
-
     "enforcement": {
       "type": "object",
-      "description": "Defines enforcement behavior.",
       "properties": {
-        "mode": {
-          "type": "string",
-          "enum": ["strict", "advisory", "hybrid"]
-        },
-        "criticalRules": {
-          "type": "array",
-          "items": { "type": "string" }
-        }
+        "mode": { "type": "string", "enum": ["advisory"] },
+        "criticalRules": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["mode"]
     },
-
     "rules": {
       "type": "object",
-      "description": "Rule pack governance.",
       "properties": {
         "core": { "type": "array", "items": { "type": "string" } },
         "local": { "type": "array", "items": { "type": "string" } },
@@ -69,71 +46,42 @@
       },
       "required": ["core", "local", "org"]
     },
-
     "waivers": {
       "type": "object",
-      "description": "Waiver and exception governance.",
       "properties": {
-        "allowedTypes": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": [
-              "file-ignore",
-              "rule-waiver",
-              "time-boxed",
-              "baseline-freeze"
-            ]
-          }
-        },
-        "maxDurationDays": { "type": "number", "default": 30 },
-        "requireApproval": { "type": "boolean", "default": true }
+        "allowedTypes": { "type": "array", "items": { "type": "string" } },
+        "maxDurationDays": { "type": "number" },
+        "requireApproval": { "type": "boolean" }
       },
       "required": ["allowedTypes"]
     },
-
     "orgGovernance": {
       "type": "object",
-      "description": "Org-level governance rules.",
       "properties": {
-        "baselinePolicy": {
-          "type": "string",
-          "enum": ["aggregate", "weighted", "manual"]
-        },
-        "allowedRepoClasses": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "enum": ["core", "legacy", "experimental", "sandbox"]
-          }
-        },
-        "crossRepoRulesEnabled": { "type": "boolean", "default": false }
+        "baselinePolicy": { "type": "string" },
+        "allowedRepoClasses": { "type": "array", "items": { "type": "string" } },
+        "crossRepoRulesEnabled": { "type": "boolean" }
       },
       "required": ["baselinePolicy", "allowedRepoClasses"]
     },
-
     "transparency": {
       "type": "object",
-      "description": "Defines what must be rendered in PRs.",
       "properties": {
-        "showGovernanceState": { "type": "boolean", "default": true },
-        "showBaselineState": { "type": "boolean", "default": true },
-        "showWaivers": { "type": "boolean", "default": true },
-        "showAuthority": { "type": "boolean", "default": true }
+        "showGovernanceState": { "type": "boolean" },
+        "showBaselineState": { "type": "boolean" },
+        "showWaivers": { "type": "boolean" },
+        "showAuthority": { "type": "boolean" }
       }
     },
-
     "reversibility": {
       "type": "object",
-      "description": "Defines rollback and reversibility guarantees.",
       "properties": {
-        "allowBaselineRollback": { "type": "boolean", "default": true },
-        "allowRuleRollback": { "type": "boolean", "default": true },
-        "allowEnforcementRollback": { "type": "boolean", "default": true }
+        "allowBaselineRollback": { "type": "boolean" },
+        "allowRuleRollback": { "type": "boolean" },
+        "allowEnforcementRollback": { "type": "boolean" }
       }
     }
   },
-
   "required": [
     "version",
     "authority",

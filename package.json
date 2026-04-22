@@ -1,21 +1,19 @@
 {
-  "name": "vireon-gatekeeper-action",
+  "name": "gatekeeper-action",
   "version": "1.0.0",
-  "description": "GitHub Action wrapper for Vireon Gatekeeper, the governance-grade enforcement engine.",
+  "description": "Gatekeeper – Architecture Governance Engine as a GitHub Action",
   "main": "index.js",
-  "type": "module",
-  "bin": {
-    "gatekeeper": "bin/gatekeeper-init.js"
-  },
   "scripts": {
-    "test": "echo \"No tests yet\""
+    "test": "echo \"No tests yet\"",
+    "lint": "echo \"No lint yet\""
   },
+  "license": "MIT",
   "dependencies": {
     "@actions/core": "^3.0.0",
-    "@actions/github": "^9.1.0",
-    "@actions/http-client": "^4.0.0",
-    "js-yaml": "^4.1.1",
-    "node-fetch": "^3.3.2"
+    "@actions/github": "^9.0.0",
+    "ajv": "^8.12.0"
   },
-  "license": "MIT"
+  "bin": {
+    "gatekeeper-init": "./bin/gatekeeper-init.js"
+  }
 }
