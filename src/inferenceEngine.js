@@ -4,10 +4,9 @@
  * then persists a baseline that is used to flag PR deviations.
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'fs';
-import { join, sep, dirname, basename, extname } from 'path';
-
-const BASELINE_PATH = join('.gatekeeper', 'baseline.json');
+import { readFileSync, readdirSync } from 'fs';
+import { join, sep, basename, extname } from 'path';
+import { saveBaseline, loadBaseline as lifecycleLoadBaseline } from './baselineLifecycle.js';
 
 const IGNORE_DIRS = new Set([
   '.git', 'node_modules', '.github', 'dist', 'build', 'coverage', '.cache',
@@ -131,11 +130,11 @@ function inferBoundaries(graph, layers) {
 
 /**
  * Build and persist a baseline from a pre-built context.
- * @param {{ allFiles: string[], dependencyGraph: Object }} context
- * @returns {Object} The persisted baseline
+ * @param {{ allFiles: string[], dependencyGraph: Object, commitHash?: string }} context
+ * @returns {Object} The raw baseline data (layers, naming, boundaries)
  */
 function buildBaseline(context) {
-  const { allFiles, dependencyGraph } = context;
+  const { allFiles, dependencyGraph, commitHash } = context;
 
   const layers = inferLayers(allFiles);
   const naming = inferNaming(allFiles);
@@ -143,9 +142,7 @@ function buildBaseline(context) {
 
   const baseline = { layers, naming, boundaries };
 
-  const dir = dirname(BASELINE_PATH);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(BASELINE_PATH, JSON.stringify(baseline, null, 2), 'utf8');
+  saveBaseline(baseline, commitHash);
 
   return baseline;
 }
@@ -154,25 +151,21 @@ function buildBaseline(context) {
  * Scan the repository rooted at `repoRoot`, infer patterns, and persist the
  * baseline.  This is the convenience entry-point for the baseline-build step.
  * @param {string} repoRoot  Absolute or relative path to the repo root.
- * @returns {Object} The persisted baseline
+ * @param {string} [commitHash]  Optional commit SHA to associate with the snapshot.
+ * @returns {Object} The raw baseline data (layers, naming, boundaries)
  */
-function buildBaselineFromRepo(repoRoot = '.') {
+function buildBaselineFromRepo(repoRoot = '.', commitHash) {
   const allFiles = walkFiles(repoRoot);
   const dependencyGraph = buildDepGraph(allFiles);
-  return buildBaseline({ allFiles, dependencyGraph });
+  return buildBaseline({ allFiles, dependencyGraph, commitHash });
 }
 
 /**
  * Load a previously persisted baseline.
- * @returns {Object|null} The baseline or null if none exists.
+ * @returns {Object|null} The versioned baseline entry, or null if none exists.
  */
 function loadBaseline() {
-  if (!existsSync(BASELINE_PATH)) return null;
-  try {
-    return JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
-  } catch {
-    return null;
-  }
+  return lifecycleLoadBaseline();
 }
 
 export { buildBaseline, buildBaselineFromRepo, loadBaseline };
