@@ -152,6 +152,9 @@ async function run() {
       // Governance contract baseline mode takes precedence over config baseline mode.
       const baselineMode = contract.baseline.mode || config.governance.baseline_mode;
 
+      // Block baseline builds when mode is 'frozen' (explicit mode lock) OR when
+      // the contract's freezeEnabled flag is set (a temporary, contract-level freeze
+      // that can be applied independently of the mode value).
       if (baselineMode === "frozen" || (contract.baseline.freezeEnabled ?? false)) {
         core.setFailed(
           "Governance Contract: baseline_mode is 'frozen' — baseline updates are not permitted. " +
@@ -361,6 +364,10 @@ async function run() {
     };
 
     // ── Enforce governance contract ────────────────────────────────────────
+    // During PR checks we only validate the runtime state (enforcement mode,
+    // baseline mode, active waivers) — we are not proposing any baseline
+    // updates or rule-pack changes, so the authority fields are not exercised
+    // by this call and are intentionally set to their most restrictive values.
     const contractState = {
       enforcementMode: effectiveMode,
       baselineMode: effectiveBaselineMode,

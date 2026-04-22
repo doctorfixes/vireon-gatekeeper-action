@@ -13,7 +13,11 @@ import * as core from '@actions/core';
 
 export const DEFAULT_CONTRACT_PATH = '.github/gatekeeper-governance.json';
 
-/** Required top-level fields as defined by the v2 schema's `required` array. */
+/**
+ * Required top-level fields as defined by the v2 schema's `required` array.
+ * Note: `transparency` and `reversibility` are intentionally absent here —
+ * they are optional in the schema and have safe defaults in GOVERNANCE_CONTRACT_DEFAULTS.
+ */
 const REQUIRED_FIELDS = ['version', 'authority', 'baseline', 'enforcement', 'rules', 'waivers', 'orgGovernance'];
 
 /**
