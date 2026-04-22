@@ -32,7 +32,7 @@
     "enforcement": {
       "type": "object",
       "properties": {
-        "mode": { "type": "string", "enum": ["advisory"] },
+        "mode": { "type": "string", "enum": ["advisory", "strict", "hybrid"] },
         "criticalRules": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["mode"]

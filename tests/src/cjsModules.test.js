@@ -148,24 +148,73 @@ describe('buildBaseline', () => {
 // ─── enforceGovernanceContract (CJS version) ─────────────────────────────────
 
 describe('enforceGovernanceContract (src/enforceGovernanceContract.js CJS)', () => {
-  it('always passes (v1 placeholder)', () => {
-    const result = enforceGovernanceContract(
-      { version: 'v1' },
-      { enforcementMode: 'strict' },
-      {}
-    );
-    expect(result.passed).toBe(true);
-    expect(result.messages).toEqual([]);
+  const makeContract = (overrides = {}) => ({
+    enforcement: { mode: 'strict', criticalRules: [] },
+    baseline: { mode: 'pr-approved', freezeEnabled: false },
+    waivers: { allowedTypes: ['rule-waiver', 'time-boxed'], maxDurationDays: 30 },
+    ...overrides,
   });
 
-  it('includes metadata with options, governanceState, contractVersion', () => {
-    const contract = { version: 'v1' };
-    const state = { enforcementMode: 'advisory' };
-    const options = { someOption: true };
-    const result = enforceGovernanceContract(contract, state, options);
-    expect(result.metadata.contractVersion).toBe('v1');
-    expect(result.metadata.governanceState).toEqual(state);
-    expect(result.metadata.options).toEqual(options);
+  const makeState = (overrides = {}) => ({
+    enforcementMode: 'strict',
+    baselineMode: 'pr-approved',
+    baselineFrozen: false,
+    authority: {
+      canUpdateBaseline: true,
+      canModifyRulePacks: ['local'],
+      canChangeEnforcementMode: true,
+      canModifyOrgGovernance: false,
+    },
+    waiverStatus: { items: [] },
+    ...overrides,
+  });
+
+  it('passes when state matches contract', () => {
+    const result = enforceGovernanceContract(makeContract(), makeState(), {});
+    expect(result.passed).toBe(true);
+    expect(result.violations).toEqual([]);
+  });
+
+  it('fails when enforcement mode does not match contract', () => {
+    const result = enforceGovernanceContract(
+      makeContract(),
+      makeState({ enforcementMode: 'advisory' }),
+      {}
+    );
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toMatch(/Illegal enforcement mode/);
+  });
+
+  it('fails when baseline mode does not match contract', () => {
+    const result = enforceGovernanceContract(
+      makeContract(),
+      makeState({ baselineMode: 'frozen' }),
+      {}
+    );
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toMatch(/Illegal baseline mode/);
+  });
+
+  it('fails for an expired waiver', () => {
+    const pastDate = new Date(Date.now() - 86400000).toISOString();
+    const result = enforceGovernanceContract(
+      makeContract(),
+      makeState({ waiverStatus: { items: [{ rule: 'rule-a', expires: pastDate }] } }),
+      {}
+    );
+    expect(result.passed).toBe(false);
+    expect(result.violations.some(v => v.includes('Expired waiver'))).toBe(true);
+  });
+
+  it('fails when org-level change is attempted without authority', () => {
+    const result = enforceGovernanceContract(makeContract(), makeState(), { orgLevelChange: true });
+    expect(result.passed).toBe(false);
+    expect(result.violations.some(v => v.includes('Unauthorized org-level governance change'))).toBe(true);
+  });
+
+  it('uses default context of {} when context is omitted', () => {
+    const result = enforceGovernanceContract(makeContract(), makeState());
+    expect(result.passed).toBe(true);
   });
 });
 
