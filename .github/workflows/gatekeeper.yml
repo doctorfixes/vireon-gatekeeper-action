@@ -10,7 +10,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Gatekeeper
-        uses: your-org/gatekeeper-action@v1
+        uses: uses: doctorfixes/vireon-gatekeeper-action@main
+
         with:
           contract: .gatekeeper/contract.json
           schema: .gatekeeper/schema.json
