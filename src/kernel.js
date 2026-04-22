@@ -17,9 +17,14 @@ async function runGatekeeper({ contractPath, schemaPath }) {
   const messages = Array.isArray(rawMessages) ? rawMessages : [];
   const reason = messages.length > 0 ? messages.join(' ') : undefined;
 
+  const score = typeof result.ruleResult?.driftScore === 'number'
+    ? result.ruleResult.driftScore
+    : undefined;
+
   return {
     shouldBlock: !!result.shouldBlock,
     ...(reason !== undefined && { reason }),
+    ...(score !== undefined && { score }),
     details: {
       ruleResult: result.ruleResult,
       enforcementCheck: result.enforcementCheck,
