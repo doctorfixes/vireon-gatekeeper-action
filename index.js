@@ -152,7 +152,7 @@ async function run() {
       // Governance contract baseline mode takes precedence over config baseline mode.
       const baselineMode = contract.baseline.mode || config.governance.baseline_mode;
 
-      if (baselineMode === "frozen" || contract.baseline.freezeEnabled) {
+      if (baselineMode === "frozen" || (contract.baseline.freezeEnabled ?? false)) {
         core.setFailed(
           "Governance Contract: baseline_mode is 'frozen' — baseline updates are not permitted. " +
           "Change baseline_mode to 'pr-approved' or 'auto-learn' to enable baseline builds."
@@ -326,10 +326,12 @@ async function run() {
     core.info(`Drift level: ${driftLevel} (risk score: ${activeRiskScore})`);
 
     const failedRuleIds = [...new Set(activeIssues.map((i) => i.rule).filter(Boolean))];
-    // Merge critical rules from the governance contract and the config.
+    // Merge and deduplicate critical rules from the governance contract and the config.
     const criticalRules = [
-      ...contract.enforcement.criticalRules,
-      ...config.governance.enforcement.hybrid_critical_rules,
+      ...new Set([
+        ...contract.enforcement.criticalRules,
+        ...config.governance.enforcement.hybrid_critical_rules,
+      ]),
     ];
     const blocking = shouldBlockMerge(
       governedResult.verdict,

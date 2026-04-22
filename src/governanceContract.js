@@ -10,6 +10,8 @@
  *   - Governance contract enforcement (authority, waivers, org governance)
  */
 
+import { GOVERNANCE_CONTRACT_DEFAULTS } from './loadGovernanceContract.js';
+
 /** @type {Object} Default risk-score thresholds (0-100 scale) per drift level. */
 const DEFAULT_THRESHOLDS = { low: 20, moderate: 40, high: 60, critical: 80 };
 
@@ -303,7 +305,7 @@ function enforceGovernanceContract(contract, state, context) {
   }
 
   // 3. Baseline Freeze Enforcement (explicit freeze flag or contract-level freeze)
-  const baselineFrozen = state.baselineFrozen || (contract.baseline.freezeEnabled === true);
+  const baselineFrozen = state.baselineFrozen || (contract.baseline.freezeEnabled ?? false);
   if (baselineFrozen && context.proposedBaselineUpdate) {
     violations.push(
       `Baseline is frozen — baseline updates are not permitted until freeze is lifted.`
@@ -337,7 +339,7 @@ function enforceGovernanceContract(contract, state, context) {
   const allowedWaiverTypes = contract.waivers?.allowedTypes ?? [];
   const maxDurationDays = typeof contract.waivers?.maxDurationDays === 'number'
     ? contract.waivers.maxDurationDays
-    : 30;
+    : GOVERNANCE_CONTRACT_DEFAULTS.waivers.maxDurationDays;
 
   (state.waiverStatus?.items ?? []).forEach(w => {
     // Expiry check
