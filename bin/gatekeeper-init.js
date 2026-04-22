@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Gatekeeper
-        uses: your-org/gatekeeper-action@v1
+        uses: doctorfixes/vireon-gatekeeper-action@v1
         with:
           contract: .gatekeeper/contract.json
           schema: .gatekeeper/schema.json
