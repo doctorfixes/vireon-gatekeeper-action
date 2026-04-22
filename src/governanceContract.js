@@ -221,4 +221,92 @@ Gatekeeper — deterministic, explainable, reversible governance for modern code
 `;
 }
 
-export { classifyDrift, shouldBlockMerge, driftLevelLabel, normaliseBaselineMode, DEFAULT_THRESHOLDS, renderGovernanceContract };
+/**
+ * Governance Contract Enforcement Engine
+ * Ensures all governance actions comply with the Governance Contract.
+ *
+ * @param {Object} contract - The governance contract definition.
+ * @param {string[]} contract.enforcement.modes - Allowed enforcement modes.
+ * @param {string[]} contract.baseline.modes - Allowed baseline modes.
+ * @param {Object} state - Current governance state.
+ * @param {string} state.enforcementMode - Active enforcement mode.
+ * @param {string} state.baselineMode - Active baseline mode.
+ * @param {boolean} state.baselineFrozen - Whether the baseline is frozen.
+ * @param {{ canUpdateBaseline: boolean, canModifyRulePacks: string[], canChangeEnforcementMode: boolean, canModifyOrgGovernance: boolean }} state.authority
+ * @param {{ items: Array<{rule: string, expires: string}> }} state.waiverStatus
+ * @param {Object} context - Context for the proposed governance action.
+ * @param {boolean} [context.proposedBaselineUpdate] - Whether a baseline update is proposed.
+ * @param {Array<{id: string, scope: string}>} context.ruleChanges - Proposed rule pack changes.
+ * @param {string} [context.proposedEnforcementMode] - Proposed new enforcement mode.
+ * @param {boolean} [context.orgLevelChange] - Whether an org-level governance change is proposed.
+ * @returns {{ passed: boolean, violations: string[] }}
+ */
+function enforceGovernanceContract(contract, state, context) {
+  const violations = [];
+
+  // 1. Enforcement Mode Protection
+  if (!contract.enforcement.modes.includes(state.enforcementMode)) {
+    violations.push(
+      `Illegal enforcement mode: ${state.enforcementMode}. Allowed: ${contract.enforcement.modes.join(', ')}`
+    );
+  }
+
+  // 2. Baseline Mode Protection
+  if (!contract.baseline.modes.includes(state.baselineMode)) {
+    violations.push(
+      `Illegal baseline mode: ${state.baselineMode}. Allowed: ${contract.baseline.modes.join(', ')}`
+    );
+  }
+
+  // 3. Baseline Freeze Enforcement
+  if (state.baselineFrozen && context.proposedBaselineUpdate) {
+    violations.push(
+      `Baseline is frozen — baseline updates are not permitted until freeze is lifted.`
+    );
+  }
+
+  // 4. Baseline Update Authority
+  if (context.proposedBaselineUpdate && !state.authority.canUpdateBaseline) {
+    violations.push(
+      `Unauthorized baseline update — only maintainers or org governance may approve baseline changes.`
+    );
+  }
+
+  // 5. Rule Pack Authority Enforcement
+  (context.ruleChanges ?? []).forEach(ruleChange => {
+    if (!state.authority.canModifyRulePacks.includes(ruleChange.scope)) {
+      violations.push(
+        `Unauthorized rule pack modification: ${ruleChange.id} (${ruleChange.scope}).`
+      );
+    }
+  });
+
+  // 6. Enforcement Mode Escalation Protection
+  if (context.proposedEnforcementMode && !state.authority.canChangeEnforcementMode) {
+    violations.push(
+      `Unauthorized enforcement mode change — only maintainers or org governance may modify enforcement.`
+    );
+  }
+
+  // 7. Waiver Validation
+  (state.waiverStatus?.items ?? []).forEach(w => {
+    const expiry = new Date(w.expires).getTime();
+    if (!Number.isNaN(expiry) && Date.now() > expiry) {
+      violations.push(`Expired waiver detected: ${w.rule}`);
+    }
+  });
+
+  // 8. Org-Level Governance Protection
+  if (context.orgLevelChange && !state.authority.canModifyOrgGovernance) {
+    violations.push(
+      `Unauthorized org-level governance change — only org governance may modify org baselines or org rule packs.`
+    );
+  }
+
+  return {
+    passed: violations.length === 0,
+    violations
+  };
+}
+
+export { classifyDrift, shouldBlockMerge, driftLevelLabel, normaliseBaselineMode, DEFAULT_THRESHOLDS, renderGovernanceContract, enforceGovernanceContract };
