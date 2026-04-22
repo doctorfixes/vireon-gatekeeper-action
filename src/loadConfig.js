@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import * as core from "@actions/core";
 import yaml from "js-yaml";
+import { normaliseBaselineMode, DEFAULT_THRESHOLDS } from "./governanceContract.js";
 
 export function loadConfig(configPath) {
   const defaults = {
@@ -13,6 +14,11 @@ export function loadConfig(configPath) {
       naming: { enforce_case: false, file_case: "kebab", class_case: "pascal", variable_case: "camel" },
     },
     plugins: { enabled: [] },
+    governance: {
+      baseline_mode: "pr-approved",
+      drift: { thresholds: { ...DEFAULT_THRESHOLDS } },
+      enforcement: { hybrid_critical_rules: [] },
+    },
   };
 
   if (!existsSync(configPath)) {
@@ -57,9 +63,38 @@ export function loadConfig(configPath) {
       plugins: {
         enabled: Array.isArray(parsed.plugins?.enabled) ? parsed.plugins.enabled : defaults.plugins.enabled,
       },
+      governance: parseGovernanceConfig(parsed.governance, defaults.governance),
     };
   } catch (err) {
     core.warning(`Failed to parse config file at ${configPath}: ${err.message}. Using defaults.`);
     return defaults;
   }
+}
+
+/**
+ * Parse and normalise the governance sub-block from the raw config.
+ *
+ * @param {Object|undefined} pg   - Raw parsed governance object (may be undefined).
+ * @param {Object}           dg   - Governance defaults.
+ * @returns {Object} Normalised governance config.
+ */
+function parseGovernanceConfig(pg, dg) {
+  const rawThresholds = pg?.drift?.thresholds ?? {};
+  const dt = dg.drift.thresholds;
+  return {
+    baseline_mode: normaliseBaselineMode(pg?.baseline_mode ?? dg.baseline_mode),
+    drift: {
+      thresholds: {
+        low:      typeof rawThresholds.low      === "number" ? rawThresholds.low      : dt.low,
+        moderate: typeof rawThresholds.moderate === "number" ? rawThresholds.moderate : dt.moderate,
+        high:     typeof rawThresholds.high     === "number" ? rawThresholds.high     : dt.high,
+        critical: typeof rawThresholds.critical === "number" ? rawThresholds.critical : dt.critical,
+      },
+    },
+    enforcement: {
+      hybrid_critical_rules: Array.isArray(pg?.enforcement?.hybrid_critical_rules)
+        ? pg.enforcement.hybrid_critical_rules
+        : dg.enforcement.hybrid_critical_rules,
+    },
+  };
 }
