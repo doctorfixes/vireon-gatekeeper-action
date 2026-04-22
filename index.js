@@ -17,7 +17,7 @@ import {
   computeOrgMetrics,
   generateOrgReport,
 } from "./src/orgGovernance.js";
-import { classifyDrift, shouldBlockMerge, driftLevelLabel } from "./src/governanceContract.js";
+import { classifyDrift, shouldBlockMerge, driftLevelLabel, renderGovernanceContract } from "./src/governanceContract.js";
 import { loadIgnorePatterns, parseWaivers, applyWaivers, buildWaiverSummary } from "./src/waiverEngine.js";
 
 const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
@@ -68,7 +68,7 @@ function buildCliArgs(configPath, configExists) {
   return args;
 }
 
-function buildComment(result, config, driftLevel, waiverSummary) {
+function buildComment(result, config, driftLevel, waiverSummary, governanceState) {
   const { summary, explain_why, max_messages } = config.settings.comments;
   const advisoryBadge = config.mode === "advisory" ? " *(advisory)*" : "";
   const hybridBadge = config.mode === "hybrid" ? " *(hybrid)*" : "";
@@ -112,6 +112,12 @@ function buildComment(result, config, driftLevel, waiverSummary) {
     }
 
     body += `</details>\n`;
+  }
+
+  if (governanceState) {
+    body += `\n<details>\n<summary>Governance Contract</summary>\n`;
+    body += renderGovernanceContract(null, governanceState);
+    body += `\n</details>\n`;
   }
 
   return body;
@@ -321,13 +327,30 @@ async function run() {
 
     const waiverSummary = buildWaiverSummary(waivers, waivedIssues);
 
+    const waiverItems = [
+      ...waivers.waivedRules.map((r) => ({ rule: r, expires: "end of PR" })),
+      ...waivers.timeBoxed.map((t) => ({ rule: "all", expires: t })),
+    ];
+    const governanceState = {
+      enforcementMode: config.mode,
+      baselineMode: config.governance.baseline_mode,
+      ruleAuthority: config.governance.rule_authority,
+      contractVersion: config.governance.contract_version,
+      baselineFrozen: waivers.baselineFreeze,
+      baselinePendingUpdate: false,
+      waiverStatus: {
+        active: waiverItems.length > 0 || waivers.emergencyOverride,
+        items: waiverItems,
+      },
+    };
+
     const { owner, repo, number } = github.context.issue;
 
     await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: number,
-      body: buildComment(governedResult, config, driftLevel, waiverSummary),
+      body: buildComment(governedResult, config, driftLevel, waiverSummary, governanceState),
     });
 
     if (governedResult.verdict === "fail") {
