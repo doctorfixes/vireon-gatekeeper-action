@@ -17,8 +17,9 @@ import {
   computeOrgMetrics,
   generateOrgReport,
 } from "./src/orgGovernance.js";
-import { classifyDrift, shouldBlockMerge, driftLevelLabel, renderGovernanceContract } from "./src/governanceContract.js";
+import { classifyDrift, shouldBlockMerge, driftLevelLabel, renderGovernanceContract, enforceGovernanceContract } from "./src/governanceContract.js";
 import { loadIgnorePatterns, parseWaivers, applyWaivers, buildWaiverSummary } from "./src/waiverEngine.js";
+import { loadGovernanceContract } from "./src/loadGovernanceContract.js";
 
 const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
 const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
@@ -68,7 +69,7 @@ function buildCliArgs(configPath, configExists) {
   return args;
 }
 
-function buildComment(result, config, driftLevel, waiverSummary, governanceState) {
+function buildComment(result, config, driftLevel, waiverSummary, governanceState, contract) {
   const { summary, explain_why, max_messages } = config.settings.comments;
   const advisoryBadge = config.mode === "advisory" ? " *(advisory)*" : "";
   const hybridBadge = config.mode === "hybrid" ? " *(hybrid)*" : "";
@@ -116,7 +117,7 @@ function buildComment(result, config, driftLevel, waiverSummary, governanceState
 
   if (governanceState) {
     body += `\n<details>\n<summary>Governance Contract</summary>\n`;
-    body += renderGovernanceContract(null, governanceState);
+    body += renderGovernanceContract(contract ?? null, governanceState);
     body += `\n</details>\n`;
   }
 
@@ -140,13 +141,21 @@ async function run() {
     const token = core.getInput("token");
     const octokit = github.getOctokit(token);
     const configPath = core.getInput("config") || ".github/gatekeeper.yml";
+    const contractPath = core.getInput("governance_contract") || ".github/gatekeeper-governance.json";
+
+    const contract = loadGovernanceContract(contractPath);
+    core.info(`Governance contract version: ${contract.version}`);
 
     // ── Baseline-build mode ────────────────────────────────────────────────
     if (core.getInput("build_baseline") === "true") {
       const config = loadConfig(configPath);
-      const baselineMode = config.governance.baseline_mode;
+      // Governance contract baseline mode takes precedence over config baseline mode.
+      const baselineMode = contract.baseline.mode || config.governance.baseline_mode;
 
-      if (baselineMode === "frozen") {
+      // Block baseline builds when mode is 'frozen' (explicit mode lock) OR when
+      // the contract's freezeEnabled flag is set (a temporary, contract-level freeze
+      // that can be applied independently of the mode value).
+      if (baselineMode === "frozen" || (contract.baseline.freezeEnabled ?? false)) {
         core.setFailed(
           "Governance Contract: baseline_mode is 'frozen' — baseline updates are not permitted. " +
           "Change baseline_mode to 'pr-approved' or 'auto-learn' to enable baseline builds."
@@ -211,8 +220,10 @@ async function run() {
     }
 
     const config = loadConfig(configPath);
-    core.info(`Gatekeeper mode: ${config.mode}`);
-    core.info(`Baseline mode: ${config.governance.baseline_mode}`);
+    // Governance contract enforcement mode takes precedence over the config mode.
+    const effectiveMode = contract.enforcement.mode || config.mode;
+    core.info(`Gatekeeper mode: ${effectiveMode}`);
+    core.info(`Baseline mode: ${contract.baseline.mode || config.governance.baseline_mode}`);
     if (config.rules.length > 0) {
       core.info(`Active rules: ${config.rules.join(", ")}`);
     }
@@ -318,10 +329,17 @@ async function run() {
     core.info(`Drift level: ${driftLevel} (risk score: ${activeRiskScore})`);
 
     const failedRuleIds = [...new Set(activeIssues.map((i) => i.rule).filter(Boolean))];
+    // Merge and deduplicate critical rules from the governance contract and the config.
+    const criticalRules = [
+      ...new Set([
+        ...contract.enforcement.criticalRules,
+        ...config.governance.enforcement.hybrid_critical_rules,
+      ]),
+    ];
     const blocking = shouldBlockMerge(
       governedResult.verdict,
-      config.mode,
-      config.governance.enforcement.hybrid_critical_rules,
+      effectiveMode,
+      criticalRules,
       failedRuleIds
     );
 
@@ -331,12 +349,13 @@ async function run() {
       ...waivers.waivedRules.map((r) => ({ rule: r, expires: "end of PR" })),
       ...waivers.timeBoxed.map((t) => ({ rule: "all", expires: t })),
     ];
+    const effectiveBaselineMode = contract.baseline.mode || config.governance.baseline_mode;
     const governanceState = {
-      enforcementMode: config.mode,
-      baselineMode: config.governance.baseline_mode,
+      enforcementMode: effectiveMode,
+      baselineMode: effectiveBaselineMode,
       ruleAuthority: config.governance.rule_authority,
-      contractVersion: config.governance.contract_version,
-      baselineFrozen: waivers.baselineFreeze,
+      contractVersion: contract.version || config.governance.contract_version,
+      baselineFrozen: waivers.baselineFreeze || contract.baseline.freezeEnabled,
       baselinePendingUpdate: false,
       waiverStatus: {
         active: waiverItems.length > 0 || waivers.emergencyOverride,
@@ -344,13 +363,40 @@ async function run() {
       },
     };
 
+    // ── Enforce governance contract ────────────────────────────────────────
+    // During PR checks we only validate the runtime state (enforcement mode,
+    // baseline mode, active waivers) — we are not proposing any baseline
+    // updates or rule-pack changes, so the authority fields are not exercised
+    // by this call and are intentionally set to their most restrictive values.
+    const contractState = {
+      enforcementMode: effectiveMode,
+      baselineMode: effectiveBaselineMode,
+      baselineFrozen: governanceState.baselineFrozen,
+      authority: {
+        canUpdateBaseline: false,
+        canModifyRulePacks: [],
+        canChangeEnforcementMode: false,
+        canModifyOrgGovernance: false,
+      },
+      waiverStatus: governanceState.waiverStatus,
+    };
+    const contractCheck = enforceGovernanceContract(contract, contractState, {
+      proposedBaselineUpdate: false,
+      ruleChanges: [],
+    });
+    if (!contractCheck.passed) {
+      for (const violation of contractCheck.violations) {
+        core.warning(`Governance Contract violation: ${violation}`);
+      }
+    }
+
     const { owner, repo, number } = github.context.issue;
 
     await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: number,
-      body: buildComment(governedResult, config, driftLevel, waiverSummary, governanceState),
+      body: buildComment(governedResult, config, driftLevel, waiverSummary, governanceState, contract),
     });
 
     if (governedResult.verdict === "fail") {

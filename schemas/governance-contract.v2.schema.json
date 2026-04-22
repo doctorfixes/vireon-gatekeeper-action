@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Gatekeeper Governance Contract Schema v2",
+  "type": "object",
+
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Governance contract version identifier."
+    },
+
+    "authority": {
+      "type": "object",
+      "description": "Defines who can modify governance state.",
+      "properties": {
+        "repoMaintainers": { "type": "array", "items": { "type": "string" } },
+        "orgGovernanceGroup": { "type": "array", "items": { "type": "string" } },
+        "engine": {
+          "type": "object",
+          "properties": {
+            "canModifyGovernance": { "type": "boolean", "const": false },
+            "canProposeBaselineUpdates": { "type": "boolean", "default": true }
+          }
+        }
+      },
+      "required": ["repoMaintainers", "orgGovernanceGroup", "engine"]
+    },
+
+    "baseline": {
+      "type": "object",
+      "description": "Baseline governance policy.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["frozen", "pr-approved", "auto-learn"]
+        },
+        "freezeEnabled": { "type": "boolean", "default": false },
+        "updatePolicy": {
+          "type": "string",
+          "enum": ["manual", "pr-approved", "auto"]
+        }
+      },
+      "required": ["mode", "updatePolicy"]
+    },
+
+    "enforcement": {
+      "type": "object",
+      "description": "Defines enforcement behavior.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["strict", "advisory", "hybrid"]
+        },
+        "criticalRules": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["mode"]
+    },
+
+    "rules": {
+      "type": "object",
+      "description": "Rule pack governance.",
+      "properties": {
+        "core": { "type": "array", "items": { "type": "string" } },
+        "local": { "type": "array", "items": { "type": "string" } },
+        "org": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["core", "local", "org"]
+    },
+
+    "waivers": {
+      "type": "object",
+      "description": "Waiver and exception governance.",
+      "properties": {
+        "allowedTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "file-ignore",
+              "rule-waiver",
+              "time-boxed",
+              "baseline-freeze"
+            ]
+          }
+        },
+        "maxDurationDays": { "type": "number", "default": 30 },
+        "requireApproval": { "type": "boolean", "default": true }
+      },
+      "required": ["allowedTypes"]
+    },
+
+    "orgGovernance": {
+      "type": "object",
+      "description": "Org-level governance rules.",
+      "properties": {
+        "baselinePolicy": {
+          "type": "string",
+          "enum": ["aggregate", "weighted", "manual"]
+        },
+        "allowedRepoClasses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["core", "legacy", "experimental", "sandbox"]
+          }
+        },
+        "crossRepoRulesEnabled": { "type": "boolean", "default": false }
+      },
+      "required": ["baselinePolicy", "allowedRepoClasses"]
+    },
+
+    "transparency": {
+      "type": "object",
+      "description": "Defines what must be rendered in PRs.",
+      "properties": {
+        "showGovernanceState": { "type": "boolean", "default": true },
+        "showBaselineState": { "type": "boolean", "default": true },
+        "showWaivers": { "type": "boolean", "default": true },
+        "showAuthority": { "type": "boolean", "default": true }
+      }
+    },
+
+    "reversibility": {
+      "type": "object",
+      "description": "Defines rollback and reversibility guarantees.",
+      "properties": {
+        "allowBaselineRollback": { "type": "boolean", "default": true },
+        "allowRuleRollback": { "type": "boolean", "default": true },
+        "allowEnforcementRollback": { "type": "boolean", "default": true }
+      }
+    }
+  },
+
+  "required": [
+    "version",
+    "authority",
+    "baseline",
+    "enforcement",
+    "rules",
+    "waivers",
+    "orgGovernance"
+  ]
+}
