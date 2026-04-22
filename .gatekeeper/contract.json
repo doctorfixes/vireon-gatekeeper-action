@@ -1,6 +1,5 @@
 {
   "version": "1.0.0",
-
   "authority": {
     "repoMaintainers": [],
     "orgGovernanceGroup": [],
@@ -9,43 +8,47 @@
       "canProposeBaselineUpdates": true
     }
   },
-
   "baseline": {
     "mode": "pr-approved",
     "freezeEnabled": false,
     "updatePolicy": "pr-approved"
   },
-
   "enforcement": {
     "mode": "advisory",
     "criticalRules": []
   },
-
   "rules": {
-    "core": ["repo-learning"],
+    "core": [
+      "repo-learning"
+    ],
     "local": [],
     "org": []
   },
-
   "waivers": {
-    "allowedTypes": ["file-ignore", "rule-waiver", "time-boxed"],
+    "allowedTypes": [
+      "file-ignore",
+      "rule-waiver",
+      "time-boxed"
+    ],
     "maxDurationDays": 30,
     "requireApproval": false
   },
-
   "orgGovernance": {
     "baselinePolicy": "aggregate",
-    "allowedRepoClasses": ["core", "legacy", "experimental", "sandbox"],
+    "allowedRepoClasses": [
+      "core",
+      "legacy",
+      "experimental",
+      "sandbox"
+    ],
     "crossRepoRulesEnabled": false
   },
-
   "transparency": {
     "showGovernanceState": true,
     "showBaselineState": true,
     "showWaivers": true,
     "showAuthority": true
   },
-
   "reversibility": {
     "allowBaselineRollback": true,
     "allowRuleRollback": true,

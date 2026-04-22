@@ -10,6 +10,9 @@ import { loadConfig } from "./src/loadConfig.js";
 import { runRules } from "./src/runRules.js";
 import { explainResults } from "./src/explainWhy.js";
 import { buildBaselineFromRepo } from "./src/inferenceEngine.js";
+import { loadBaseline as loadBaselineData, loadHistory as loadHistoryData } from "./src/baselineLifecycle.js";
+import { computeDriftOverTime } from "./src/driftOverTime.js";
+import { generateArchitectureHealthReport } from "./src/architectureHealthReport.js";
 import {
   aggregateRepoBaselines,
   saveOrgBaseline,
@@ -69,7 +72,7 @@ function buildCliArgs(configPath, configExists) {
   return args;
 }
 
-function buildComment(result, config, driftLevel, waiverSummary, governanceState, contract) {
+function buildComment(result, config, driftLevel, waiverSummary, governanceState, contract, healthReport) {
   const { summary, explain_why, max_messages } = config.settings.comments;
   const advisoryBadge = config.mode === "advisory" ? " *(advisory)*" : "";
   const hybridBadge = config.mode === "hybrid" ? " *(hybrid)*" : "";
@@ -118,6 +121,12 @@ function buildComment(result, config, driftLevel, waiverSummary, governanceState
   if (governanceState) {
     body += `\n<details>\n<summary>Governance Contract</summary>\n`;
     body += renderGovernanceContract(contract ?? null, governanceState);
+    body += `\n</details>\n`;
+  }
+
+  if (healthReport) {
+    body += `\n<details>\n<summary>Architecture Health Report</summary>\n\n`;
+    body += healthReport.trim();
     body += `\n</details>\n`;
   }
 
@@ -363,6 +372,25 @@ async function run() {
       },
     };
 
+    // ── Architecture Health Report ─────────────────────────────────────────
+    const baselineSnapshot = loadBaselineData();
+    const historySnapshots = loadHistoryData();
+    const driftOverTime = computeDriftOverTime(historySnapshots);
+    const recentFindings = activeIssues.map((i) => ({
+      type: i.rule || "issue",
+      detail: i.message || JSON.stringify(i),
+    }));
+    const healthReport = generateArchitectureHealthReport({
+      baseline: (baselineSnapshot?.data ?? baselineSnapshot) || {
+        layers: [],
+        naming: { file_case: "kebab" },
+        boundaries: { edges: {} },
+      },
+      history: historySnapshots,
+      driftOverTime,
+      recentFindings,
+    });
+
     // ── Enforce governance contract ────────────────────────────────────────
     // During PR checks we only validate the runtime state (enforcement mode,
     // baseline mode, active waivers) — we are not proposing any baseline
@@ -396,7 +424,7 @@ async function run() {
       owner,
       repo,
       issue_number: number,
-      body: buildComment(governedResult, config, driftLevel, waiverSummary, governanceState, contract),
+      body: buildComment(governedResult, config, driftLevel, waiverSummary, governanceState, contract, healthReport),
     });
 
     if (governedResult.verdict === "fail") {

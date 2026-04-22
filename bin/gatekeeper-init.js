@@ -14,6 +14,12 @@ function writeFileSafe(filePath, content) {
 }
 
 function main() {
+  const subcommand = process.argv[2];
+  if (subcommand && subcommand !== "init") {
+    console.error(`\nUnknown command: ${subcommand}\nUsage: gatekeeper init\n`);
+    process.exit(1);
+  }
+
   console.log("\n🚀 Gatekeeper Init — Setting up minimal governance…\n");
 
   // 1. Minimal contract
@@ -93,19 +99,30 @@ function main() {
 on:
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   governance:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Run Gatekeeper
-        uses: your-org/gatekeeper-action@v1
         with:
-          contract: .gatekeeper/contract.json
-          schema: .gatekeeper/schema.json
-        env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Build Architecture Baseline
+        uses: doctorfixes/vireon-gatekeeper-action@v1
+        with:
+          token: \${{ secrets.GITHUB_TOKEN }}
+          build_baseline: "true"
+          governance_contract: .gatekeeper/contract.json
+
+      - name: Run Gatekeeper Governance
+        uses: doctorfixes/vireon-gatekeeper-action@v1
+        with:
+          token: \${{ secrets.GITHUB_TOKEN }}
+          governance_contract: .gatekeeper/contract.json
 `
   );
 
