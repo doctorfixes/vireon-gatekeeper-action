@@ -12,6 +12,9 @@
 
 import { existsSync, readFileSync } from 'fs';
 
+// Maximum number of characters in a file extension considered when extracting
+// a file path from an issue message (e.g. ".js", ".tsx", ".config.js").
+const MAX_EXTENSION_LENGTH = 10;
 const IGNORE_FILE = '.gatekeeper-ignore';
 const WAIVE_PREFIX = 'gatekeeper-waive:';
 const BASELINE_FREEZE_LABEL = 'gatekeeper-baseline-freeze';
@@ -88,9 +91,11 @@ function matchesIgnorePattern(filePath, patterns) {
   const normalised = filePath.replace(/\\/g, '/');
   for (const pattern of patterns) {
     const regexStr = pattern
+      // Normalize path separators first; remaining backslashes are then escaped below
       .replace(/\\/g, '/')
-      // Escape all regex metacharacters except * which we handle manually
-      .replace(/[.+^${}()|[\]]/g, '\\$&')
+      // Escape all regex metacharacters including backslash (belt-and-suspenders
+      // after the normalization above, and guards against any future code changes)
+      .replace(/[\\+.^${}()|[\]]/g, '\\$&')
       // ** → match any path (including separators)
       .replace(/\*\*/g, '\x00')
       // * → match within one segment only
@@ -117,7 +122,7 @@ function matchesIgnorePattern(filePath, patterns) {
  */
 function extractFileFromMessage(message) {
   if (!message) return null;
-  const m = message.match(/"([^"]+\.[a-zA-Z]{1,10})"/);
+  const m = message.match(new RegExp(`"([^"]+\\.[a-zA-Z]{1,${MAX_EXTENSION_LENGTH}})"`));
   return m ? m[1] : null;
 }
 

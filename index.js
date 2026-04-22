@@ -25,6 +25,7 @@ const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
 
 // Each detected issue contributes this many points toward the 0-100 risk score.
 const RISK_SCORE_PER_ISSUE = 20;
+const MAX_RISK_SCORE = 100;
 
 function runNativeChecks(diffText, config) {
   const activeRules = new Set(config.rules.length > 0 ? config.rules : NATIVE_CHECKS.map((c) => c.id));
@@ -48,7 +49,7 @@ function runNativeChecks(diffText, config) {
     }
   }
 
-  const riskScore = allIssues.length > 0 ? Math.min(100, allIssues.length * RISK_SCORE_PER_ISSUE) : 0;
+  const riskScore = allIssues.length > 0 ? Math.min(MAX_RISK_SCORE, allIssues.length * RISK_SCORE_PER_ISSUE) : 0;
   return {
     risk_score: riskScore,
     verdict: anyFailed ? "fail" : "pass",
@@ -114,6 +115,19 @@ function buildComment(result, config, driftLevel, waiverSummary) {
   }
 
   return body;
+}
+
+/**
+ * Determine whether there are unwaived failures that should be acted upon.
+ *
+ * @param {'pass'|'fail'} originalVerdict  - Verdict before waivers were applied.
+ * @param {Array}         activeIssues     - Issues that survived waiver filtering.
+ * @param {{ emergencyOverride: boolean }} waivers
+ * @returns {boolean}
+ */
+function hasActiveFailures(originalVerdict, activeIssues, waivers) {
+  if (waivers.emergencyOverride) return false;
+  return activeIssues.length > 0 || originalVerdict === "fail";
 }
 
 async function run() {
@@ -263,7 +277,7 @@ async function run() {
         }
         const allIssues = [...nativeResult.issues, ...customIssues];
         const anyFailed = nativeResult.verdict === "fail" || customResults.some((r) => !r.passed);
-        const riskScore = allIssues.length > 0 ? Math.min(100, allIssues.length * RISK_SCORE_PER_ISSUE) : 0;
+        const riskScore = allIssues.length > 0 ? Math.min(MAX_RISK_SCORE, allIssues.length * RISK_SCORE_PER_ISSUE) : 0;
         result = {
           ...nativeResult,
           risk_score: riskScore,
@@ -284,11 +298,9 @@ async function run() {
     );
 
     const activeRiskScore =
-      activeIssues.length > 0 ? Math.min(100, activeIssues.length * RISK_SCORE_PER_ISSUE) : 0;
+      activeIssues.length > 0 ? Math.min(MAX_RISK_SCORE, activeIssues.length * RISK_SCORE_PER_ISSUE) : 0;
 
-    const anyActiveFailure =
-      !waivers.emergencyOverride &&
-      (activeIssues.length > 0 || (result.verdict === "fail" && waivedIssues.length === 0));
+    const anyActiveFailure = hasActiveFailures(result.verdict, activeIssues, waivers);
 
     const governedResult = {
       ...result,
