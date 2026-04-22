@@ -14,4 +14,8 @@ inputs:
 
 outputs:
   should_block:
-    description: "Whether the PR should be blocked (always false in v1)"
+    description: "Whether the PR should be blocked"
+  reason:
+    description: "Human-readable explanation of the gatekeeper decision"
+  score:
+    description: "Numeric drift score (0–1) when available"
