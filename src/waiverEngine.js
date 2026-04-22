@@ -113,6 +113,9 @@ function matchesIgnorePattern(filePath, patterns) {
 
 // ─── Apply waivers ────────────────────────────────────────────────────────────
 
+// Pre-compiled regex for extracting a file path from an issue message string.
+const FILE_IN_MESSAGE_RE = new RegExp(`"([^"]+\\.[a-zA-Z]{1,${MAX_EXTENSION_LENGTH}})"`);
+
 /**
  * Best-effort extraction of a file path from an issue message string.
  * Looks for the first double-quoted token that contains a dot-extension.
@@ -122,7 +125,7 @@ function matchesIgnorePattern(filePath, patterns) {
  */
 function extractFileFromMessage(message) {
   if (!message) return null;
-  const m = message.match(new RegExp(`"([^"]+\\.[a-zA-Z]{1,${MAX_EXTENSION_LENGTH}})"`));
+  const m = message.match(FILE_IN_MESSAGE_RE);
   return m ? m[1] : null;
 }
 

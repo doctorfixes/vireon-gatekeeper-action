@@ -120,14 +120,13 @@ function buildComment(result, config, driftLevel, waiverSummary) {
 /**
  * Determine whether there are unwaived failures that should be acted upon.
  *
- * @param {'pass'|'fail'} originalVerdict  - Verdict before waivers were applied.
- * @param {Array}         activeIssues     - Issues that survived waiver filtering.
+ * @param {Array}  activeIssues - Issues that survived waiver filtering.
  * @param {{ emergencyOverride: boolean }} waivers
  * @returns {boolean}
  */
-function hasActiveFailures(originalVerdict, activeIssues, waivers) {
+function hasActiveFailures(activeIssues, waivers) {
   if (waivers.emergencyOverride) return false;
-  return activeIssues.length > 0 || originalVerdict === "fail";
+  return activeIssues.length > 0;
 }
 
 async function run() {
@@ -300,7 +299,7 @@ async function run() {
     const activeRiskScore =
       activeIssues.length > 0 ? Math.min(MAX_RISK_SCORE, activeIssues.length * RISK_SCORE_PER_ISSUE) : 0;
 
-    const anyActiveFailure = hasActiveFailures(result.verdict, activeIssues, waivers);
+    const anyActiveFailure = hasActiveFailures(activeIssues, waivers);
 
     const governedResult = {
       ...result,
