@@ -9,6 +9,14 @@ const SENSITIVITY_THRESHOLDS = {
   high: 0.2,
 };
 
+const DRIFT_WEIGHTS = {
+  fileAdded: 0.05,
+  fileRemoved: 0.05,
+  fileMoved: 0.1,
+  dependencyAdded: 0.1,
+  dependencyRemoved: 0.05,
+};
+
 /**
  * Parse a unified diff into structured changed-file and per-file diff records.
  * @param {string} diff
@@ -21,7 +29,7 @@ function parseDiff(diff) {
   const fileBlocks = diff.split(/^diff --git /m).filter(Boolean);
 
   for (const block of fileBlocks) {
-    const headerMatch = block.match(/^a\/(.+?)\s+b\/(.+)$/m);
+    const headerMatch = block.match(/^a\/(.+?)\s+b\/(.+?)$/m);
     if (!headerMatch) continue;
 
     const fromPath = headerMatch[1].trim();
@@ -39,8 +47,12 @@ function parseDiff(diff) {
       status = "modified";
     }
 
-    const addedLines = lines.filter((l) => l.startsWith("+") && !l.startsWith("+++"));
-    const removedLines = lines.filter((l) => l.startsWith("-") && !l.startsWith("---"));
+    const addedLines = lines
+      .filter((l) => l.startsWith("+") && !l.startsWith("+++"))
+      .map((l) => l.slice(1));
+    const removedLines = lines
+      .filter((l) => l.startsWith("-") && !l.startsWith("---"))
+      .map((l) => l.slice(1));
 
     changedFiles.push({
       path: toPath,
@@ -115,7 +127,7 @@ export default {
         message: `New files added: ${newFiles.map((f) => f.path).join(", ")}`,
         why: "Adding new files expands the codebase structure and may introduce new dependencies.",
       });
-      driftScore += newFiles.length * 0.05;
+      driftScore += newFiles.length * DRIFT_WEIGHTS.fileAdded;
     }
 
     // 2. Detect deleted files (structural contraction)
@@ -126,7 +138,7 @@ export default {
         message: `Files removed: ${deletedFiles.map((f) => f.path).join(", ")}`,
         why: "Removing files contracts the codebase structure and may break existing consumers.",
       });
-      driftScore += deletedFiles.length * 0.05;
+      driftScore += deletedFiles.length * DRIFT_WEIGHTS.fileRemoved;
     }
 
     // 3. Detect file movement (architecture drift)
@@ -137,7 +149,7 @@ export default {
         message: `Files moved: ${movedFiles.map((f) => `${f.fromPath} → ${f.path}`).join(", ")}`,
         why: "Moving files changes the module layout and can break import paths across the codebase.",
       });
-      driftScore += movedFiles.length * 0.1;
+      driftScore += movedFiles.length * DRIFT_WEIGHTS.fileMoved;
     }
 
     // 4. Detect dependency changes
@@ -162,7 +174,7 @@ export default {
           message: `New dependencies in "${file}": ${added.join(", ")}`,
           why: "Adding new import dependencies increases coupling and can signal architectural drift.",
         });
-        driftScore += added.length * 0.1;
+        driftScore += added.length * DRIFT_WEIGHTS.dependencyAdded;
       }
 
       if (removed.length > 0) {
@@ -171,7 +183,7 @@ export default {
           message: `Removed dependencies in "${file}": ${removed.join(", ")}`,
           why: "Removing import dependencies may indicate dead code removal or breaking interface changes.",
         });
-        driftScore += removed.length * 0.05;
+        driftScore += removed.length * DRIFT_WEIGHTS.dependencyRemoved;
       }
     }
 
