@@ -23,7 +23,6 @@ inputs:
   governance_contract:
     description: "Legacy: Path to the Gatekeeper Governance Contract file. Use 'contract' instead."
     required: false
-    default: ""
   config:
     description: "Legacy: Path to Gatekeeper config file (defaults to .github/gatekeeper.yml)"
     required: false

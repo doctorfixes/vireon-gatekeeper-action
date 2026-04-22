@@ -12,6 +12,50 @@ import {
 import { runGovernanceKernel } from "./src/governanceKernel.js";
 import { loadGovernanceContract } from "./src/loadGovernanceContract.js";
 
+/**
+ * Build a governance PR comment from the kernel's output.
+ *
+ * @param {{
+ *   ruleResult: Object,
+ *   explainedResults: Array,
+ *   governanceComment: string,
+ *   driftOverTime: Object
+ * }} kernelResult
+ * @returns {string} Markdown body for the PR comment.
+ */
+function buildPRComment({ ruleResult, explainedResults, governanceComment, driftOverTime }) {
+  const driftTrend = driftOverTime?.trend ?? "stable";
+  const trendEmoji = { stable: "✅", drifting: "⚠️", critical: "🚨" }[driftTrend] ?? "ℹ️";
+  const findingCount = (ruleResult.messages || []).length;
+  const findingsLine = ruleResult.passed
+    ? "✅ None"
+    : `⚠️ ${findingCount} finding(s) detected`;
+
+  let body = `### 🛡️ Gatekeeper Governance Report *(advisory)*\n\n`;
+  body += `**Drift Trend:** ${trendEmoji} \`${driftTrend}\`  \n`;
+  body += `**Findings:** ${findingsLine}  \n\n`;
+
+  if (!ruleResult.passed && explainedResults?.length > 0) {
+    body += `<details>\n<summary>Architecture Findings</summary>\n\n`;
+    for (const r of explainedResults) {
+      for (const msg of r.messages || []) {
+        const text = typeof msg === "string" ? msg : msg.message ?? JSON.stringify(msg);
+        const why = typeof msg === "object" && msg.why ? `\n  > *Why:* ${msg.why}` : "";
+        body += `- ${text}${why}\n`;
+      }
+    }
+    body += `\n</details>\n\n`;
+  }
+
+  if (governanceComment) {
+    body += `<details>\n<summary>Governance Contract</summary>\n`;
+    body += governanceComment;
+    body += `\n</details>\n`;
+  }
+
+  return body;
+}
+
 async function run() {
   try {
     const token = core.getInput("token");
@@ -172,49 +216,6 @@ async function run() {
   }
 }
 
-/**
- * Build a governance PR comment from the kernel's output.
- *
- * @param {{
- *   ruleResult: Object,
- *   explainedResults: Array,
- *   governanceComment: string,
- *   driftOverTime: Object
- * }} kernelResult
- * @returns {string} Markdown body for the PR comment.
- */
-function buildPRComment({ ruleResult, explainedResults, governanceComment, driftOverTime }) {
-  const driftTrend = driftOverTime?.trend ?? "stable";
-  const trendEmoji = { stable: "✅", drifting: "⚠️", critical: "🚨" }[driftTrend] ?? "ℹ️";
-  const findingCount = (ruleResult.messages || []).length;
-  const findingsLine = ruleResult.passed
-    ? "✅ None"
-    : `⚠️ ${findingCount} finding(s) detected`;
-
-  let body = `### 🛡️ Gatekeeper Governance Report *(advisory)*\n\n`;
-  body += `**Drift Trend:** ${trendEmoji} \`${driftTrend}\`  \n`;
-  body += `**Findings:** ${findingsLine}  \n\n`;
-
-  if (!ruleResult.passed && explainedResults?.length > 0) {
-    body += `<details>\n<summary>Architecture Findings</summary>\n\n`;
-    for (const r of explainedResults) {
-      for (const msg of r.messages || []) {
-        const text = typeof msg === "string" ? msg : msg.message ?? JSON.stringify(msg);
-        const why = typeof msg === "object" && msg.why ? `\n  > *Why:* ${msg.why}` : "";
-        body += `- ${text}${why}\n`;
-      }
-    }
-    body += `\n</details>\n\n`;
-  }
-
-  if (governanceComment) {
-    body += `<details>\n<summary>Governance Contract</summary>\n`;
-    body += governanceComment;
-    body += `\n</details>\n`;
-  }
-
-  return body;
-}
-
 run();
+
 
