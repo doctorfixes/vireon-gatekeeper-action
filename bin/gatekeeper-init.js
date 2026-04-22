@@ -98,31 +98,40 @@ function main() {
 
 on:
   pull_request:
-
-permissions:
-  contents: read
-  pull-requests: write
+  push:
+    branches: [main]
 
 jobs:
-  governance:
+  baseline:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Build Architecture Baseline
+      - name: Build Baseline
         uses: doctorfixes/vireon-gatekeeper-action@v1
         with:
           token: \${{ secrets.GITHUB_TOKEN }}
+          contract: .gatekeeper/contract.json
           build_baseline: "true"
-          governance_contract: .gatekeeper/contract.json
 
-      - name: Run Gatekeeper Governance
+  governance:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Gatekeeper
         uses: doctorfixes/vireon-gatekeeper-action@v1
         with:
           token: \${{ secrets.GITHUB_TOKEN }}
-          governance_contract: .gatekeeper/contract.json
+          contract: .gatekeeper/contract.json
+          schema: .gatekeeper/schema.json
 `
   );
 
