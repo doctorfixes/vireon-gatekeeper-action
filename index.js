@@ -17,6 +17,8 @@ import {
   computeOrgMetrics,
   generateOrgReport,
 } from "./src/orgGovernance.js";
+import { classifyDrift, shouldBlockMerge, driftLevelLabel } from "./src/governanceContract.js";
+import { loadIgnorePatterns, parseWaivers, applyWaivers, buildWaiverSummary } from "./src/waiverEngine.js";
 
 const NATIVE_CHECKS = [semanticDrift, architectureBoundaries, namingConventions];
 const NATIVE_IDS = new Set(NATIVE_CHECKS.map((c) => c.id));
@@ -65,13 +67,19 @@ function buildCliArgs(configPath, configExists) {
   return args;
 }
 
-function buildComment(result, config) {
+function buildComment(result, config, driftLevel, waiverSummary) {
   const { summary, explain_why, max_messages } = config.settings.comments;
   const advisoryBadge = config.mode === "advisory" ? " *(advisory)*" : "";
+  const hybridBadge = config.mode === "hybrid" ? " *(hybrid)*" : "";
 
-  let body = `### 🛡️ Vireon Gatekeeper Result${advisoryBadge}  \n`;
+  let body = `### 🛡️ Vireon Gatekeeper Result${advisoryBadge}${hybridBadge}  \n`;
   body += `**Risk Score:** ${result.risk_score}  \n`;
+  body += `**Drift Level:** ${driftLevelLabel(driftLevel ?? 'none')}  \n`;
   body += `**Verdict:** ${result.verdict}\n\n`;
+
+  if (waiverSummary) {
+    body += `${waiverSummary}\n\n`;
+  }
 
   if (summary && result.summary) {
     body += `**Summary:** ${result.summary}\n\n`;
@@ -116,7 +124,19 @@ async function run() {
 
     // ── Baseline-build mode ────────────────────────────────────────────────
     if (core.getInput("build_baseline") === "true") {
+      const config = loadConfig(configPath);
+      const baselineMode = config.governance.baseline_mode;
+
+      if (baselineMode === "frozen") {
+        core.setFailed(
+          "Governance Contract: baseline_mode is 'frozen' — baseline updates are not permitted. " +
+          "Change baseline_mode to 'pr-approved' or 'auto-learn' to enable baseline builds."
+        );
+        return;
+      }
+
       core.info("Inference engine: scanning repository to build baseline…");
+      core.info(`Baseline mode: ${baselineMode}`);
       const commitHash = github.context.sha || null;
       const baseline = buildBaselineFromRepo(".", commitHash);
       core.info(`Baseline written to .gatekeeper/baseline.json`);
@@ -125,6 +145,13 @@ async function run() {
       core.info(`Inferred naming: ${baseline.naming.file_case}`);
       const edgeCount = Object.keys(baseline.boundaries.edges).length;
       core.info(`Inferred boundary edges: ${edgeCount}`);
+
+      if (baselineMode === "pr-approved") {
+        core.info(
+          "Governance Contract: baseline_mode is 'pr-approved' — the generated baseline " +
+          "requires a maintainer-approved PR before it takes effect."
+        );
+      }
       return;
     }
 
@@ -166,8 +193,22 @@ async function run() {
 
     const config = loadConfig(configPath);
     core.info(`Gatekeeper mode: ${config.mode}`);
+    core.info(`Baseline mode: ${config.governance.baseline_mode}`);
     if (config.rules.length > 0) {
       core.info(`Active rules: ${config.rules.join(", ")}`);
+    }
+
+    // ── Collect PR labels for waiver parsing ──────────────────────────────
+    const pr = github.context.payload.pull_request;
+    const prLabels = pr?.labels ?? [];
+    const waivers = parseWaivers(prLabels);
+    const ignorePatterns = loadIgnorePatterns();
+
+    if (waivers.emergencyOverride) {
+      core.warning("Governance Contract: emergency override active — all enforcement suspended.");
+    }
+    if (waivers.baselineFreeze) {
+      core.info("Governance Contract: baseline-freeze label detected — baseline updates paused.");
     }
 
     const diffOverride = core.getInput("diff");
@@ -176,7 +217,6 @@ async function run() {
     if (diffOverride) {
       diffText = diffOverride;
     } else {
-      const pr = github.context.payload.pull_request;
       if (!pr) {
         core.setFailed("This action must run on a pull_request event.");
         return;
@@ -236,18 +276,52 @@ async function run() {
       }
     }
 
+    // ── Apply waivers & governance contract ───────────────────────────────
+    const { filtered: activeIssues, waived: waivedIssues } = applyWaivers(
+      result.issues ?? [],
+      waivers,
+      ignorePatterns
+    );
+
+    const activeRiskScore =
+      activeIssues.length > 0 ? Math.min(100, activeIssues.length * RISK_SCORE_PER_ISSUE) : 0;
+
+    const anyActiveFailure =
+      !waivers.emergencyOverride &&
+      (activeIssues.length > 0 || (result.verdict === "fail" && waivedIssues.length === 0));
+
+    const governedResult = {
+      ...result,
+      risk_score: activeRiskScore,
+      verdict: anyActiveFailure ? "fail" : "pass",
+      issues: activeIssues,
+    };
+
+    const driftLevel = classifyDrift(activeRiskScore, config.governance.drift.thresholds);
+    core.info(`Drift level: ${driftLevel} (risk score: ${activeRiskScore})`);
+
+    const failedRuleIds = [...new Set(activeIssues.map((i) => i.rule).filter(Boolean))];
+    const blocking = shouldBlockMerge(
+      governedResult.verdict,
+      config.mode,
+      config.governance.enforcement.hybrid_critical_rules,
+      failedRuleIds
+    );
+
+    const waiverSummary = buildWaiverSummary(waivers, waivedIssues);
+
     const { owner, repo, number } = github.context.issue;
 
     await octokit.rest.issues.createComment({
       owner,
       repo,
       issue_number: number,
-      body: buildComment(result, config),
+      body: buildComment(governedResult, config, driftLevel, waiverSummary),
     });
 
-    if (result.verdict === "fail") {
-      if (config.mode === "advisory") {
-        core.warning("Vireon Gatekeeper detected high-risk changes (advisory mode — not blocking).");
+    if (governedResult.verdict === "fail") {
+      if (!blocking) {
+        core.warning("Vireon Gatekeeper detected high-risk changes (not blocking in current mode).");
       } else {
         core.setFailed("Vireon Gatekeeper blocked this PR due to high risk.");
       }
