@@ -19,8 +19,10 @@ function computeDriftScore(evaluation) {
   });
   if (score > 1) score = 1;
 
-  const top = violations[0];
-  const reason = `${violations.length} violation(s): ${top.message} (rule: ${top.id})`;
+  const top = violations.length > 0 ? violations[0] : null;
+  const reason = top
+    ? `${violations.length} violation(s): ${top.message} (rule: ${top.id})`
+    : `${violations.length} violation(s) detected`;
 
   return { score, reason };
 }
