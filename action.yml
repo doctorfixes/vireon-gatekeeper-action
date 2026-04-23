@@ -1,21 +1,25 @@
-name: "Gatekeeper Governance Kernel"
-description: "Runs the Gatekeeper architecture governance engine on pull requests."
-runs:
-  using: "node20"
-  main: "index.js"
+name: "Vireon Gatekeeper"
+description: "Governance-grade PR gate: contract + schema + drift scoring."
+author: "doctorfixes"
 
 inputs:
   contract:
-    description: "Path to governance contract"
+    description: "Path to Gatekeeper contract JSON"
     required: true
+    default: ".gatekeeper/contract.json"
   schema:
-    description: "Path to governance schema"
+    description: "Path to Gatekeeper schema JSON"
     required: true
+    default: ".gatekeeper/schema.json"
 
 outputs:
   should_block:
-    description: "Whether the PR should be blocked"
+    description: "true if the PR should be blocked"
   reason:
-    description: "Human-readable explanation of the gatekeeper decision"
+    description: "Human-readable explanation for the decision"
   score:
-    description: "Numeric drift score (0–1) when available"
+    description: "Drift/risk score between 0 and 1"
+
+runs:
+  using: "node16"
+  main: "index.js"
