@@ -15,8 +15,7 @@ function computeDriftScore(evaluation) {
   }
 
   // Simple normalization: 1 violation = 0.4, 2 = 0.8, 3+ = 1.0
-  let score = 0.4 * count;
-  if (score > 1) score = 1;
+  const score = Math.min(0.4 * count, 1.0);
 
   return {
     score,
