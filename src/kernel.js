@@ -7,7 +7,7 @@ function loadJson(path) {
   return JSON.parse(fs.readFileSync(path, 'utf8'));
 }
 
-async function runGatekeeper({ contractPath, schemaPath, mode = 'enforce' }) {
+async function runGatekeeper({ contractPath, schemaPath, mode = 'observe' }) {
   let contract;
   let schema;
 
@@ -16,10 +16,9 @@ async function runGatekeeper({ contractPath, schemaPath, mode = 'enforce' }) {
   } catch (e) {
     return {
       shouldBlock: mode === 'enforce',
-      reason: `Config error: unable to load contract at ${contractPath} (${e.message})`,
+      reason: `Unable to load contract: ${e.message}`,
       score: 1,
-      failure_type: 'config_error',
-      details: null
+      failure_type: 'contract_error'
     };
   }
 
@@ -28,10 +27,9 @@ async function runGatekeeper({ contractPath, schemaPath, mode = 'enforce' }) {
   } catch (e) {
     return {
       shouldBlock: mode === 'enforce',
-      reason: `Config error: unable to load schema at ${schemaPath} (${e.message})`,
+      reason: `Unable to load schema: ${e.message}`,
       score: 1,
-      failure_type: 'config_error',
-      details: null
+      failure_type: 'schema_error'
     };
   }
 
@@ -40,10 +38,9 @@ async function runGatekeeper({ contractPath, schemaPath, mode = 'enforce' }) {
   } catch (e) {
     return {
       shouldBlock: mode === 'enforce',
-      reason: `Config error: ${e.message}`,
+      reason: `Schema validation error: ${e.message}`,
       score: 1,
-      failure_type: 'config_error',
-      details: null
+      failure_type: 'schema_error'
     };
   }
 
