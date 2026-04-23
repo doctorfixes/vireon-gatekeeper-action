@@ -16,17 +16,15 @@ describe('Gatekeeper kernel', () => {
     }
   });
 
-  it('returns shouldBlock: false for advisory enforcement mode', async () => {
+  it('returns shouldBlock: false for a valid, low-risk contract', async () => {
     const result = await runGatekeeper({ contractPath, schemaPath });
     expect(result.shouldBlock).toBe(false);
   });
 
-  it('includes details object with expected fields', async () => {
+  it('includes details object with violations and passed fields', async () => {
     const result = await runGatekeeper({ contractPath, schemaPath });
     expect(result).toHaveProperty('details');
-    expect(result.details).toHaveProperty('ruleResult');
-    expect(result.details).toHaveProperty('enforcementCheck');
-    expect(result.details).toHaveProperty('driftOverTime');
-    expect(result.details).toHaveProperty('healthReport');
+    expect(result.details).toHaveProperty('violations');
+    expect(result.details).toHaveProperty('passed');
   });
 });

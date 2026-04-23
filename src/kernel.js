@@ -1,37 +1,37 @@
-const { runGovernanceKernel } = require('./governanceKernel');
+// src/kernel.js
+const fs = require('fs');
+const { validateSchema } = require('./schema');
+const { evaluateRules } = require('./rules');
+const { computeDriftScore } = require('./drift');
+
+function loadJson(filePath) {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  return JSON.parse(raw);
+}
 
 /**
  * Orchestrates the full Gatekeeper evaluation.
- *
- * @param {{ contractPath: string, schemaPath: string }} params
- * @returns {Promise<{ shouldBlock: boolean, reason: string, score?: number, details?: any }>}
+ * Returns: { shouldBlock, reason, score, details }
  */
 async function runGatekeeper({ contractPath, schemaPath }) {
-  const context = {
-    commitHash: process.env.GITHUB_SHA || 'unknown',
-  };
+  const contract = loadJson(contractPath);
+  const schema = loadJson(schemaPath);
 
-  const result = await runGovernanceKernel({ contractPath, schemaPath, context });
+  validateSchema(schema, contract);
 
-  const rawMessages = result.ruleResult?.messages;
-  const messages = Array.isArray(rawMessages) ? rawMessages : [];
-  const reason = messages.length > 0 ? messages.join(' ') : undefined;
+  const evaluation = evaluateRules({ contract, schema });
+  const drift = computeDriftScore(evaluation);
 
-  const score = typeof result.ruleResult?.driftScore === 'number'
-    ? result.ruleResult.driftScore
-    : undefined;
+  const shouldBlock = drift.score >= 0.7;
 
   return {
-    shouldBlock: !!result.shouldBlock,
-    ...(reason !== undefined && { reason }),
-    ...(score !== undefined && { score }),
-    details: {
-      ruleResult: result.ruleResult,
-      enforcementCheck: result.enforcementCheck,
-      driftOverTime: result.driftOverTime,
-      healthReport: result.healthReport,
-    },
+    shouldBlock,
+    reason: drift.reason,
+    score: drift.score,
+    details: evaluation
   };
 }
 
-module.exports = { runGatekeeper };
+module.exports = {
+  runGatekeeper
+};
