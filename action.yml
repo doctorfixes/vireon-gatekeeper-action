@@ -1,5 +1,5 @@
 name: "Vireon Gatekeeper"
-description: "Governance kernel: contract + schema + drift scoring."
+description: "Governance kernel with PR comments, contract diff, and schema-driven severity."
 author: "doctorfixes"
 
 inputs:
@@ -8,13 +8,16 @@ inputs:
     required: true
     default: ".gatekeeper/contract.json"
   schema:
-    description: "Path to Gatekeeper schema JSON"
+    description: "Path to Gatekeeper/schema.json"
     required: true
     default: ".gatekeeper/schema.json"
   mode:
     description: "observe | enforce"
     required: false
-    default: "enforce"
+    default: "observe"
+  github_token:
+    description: "GitHub token for posting PR comments"
+    required: false
 
 outputs:
   should_block:
@@ -24,7 +27,7 @@ outputs:
   score:
     description: "Drift/risk score between 0 and 1"
   failure_type:
-    description: "policy_violation | config_error | engine_error | none"
+    description: "policy_violation | config_error | engine_error | schema_error | contract_error | none"
 
 runs:
   using: "node16"
