@@ -1,28 +1,28 @@
-// src/drift.js
+const SEVERITY_WEIGHTS = {
+  low: 0.1,
+  medium: 0.25,
+  high: 0.4,
+  critical: 0.7
+};
 
-/**
- * Compute a drift/risk score from evaluation.
- * For now: score = normalized violation count.
- */
 function computeDriftScore(evaluation) {
-  const count = evaluation.violations.length;
+  const { violations } = evaluation;
 
-  if (count === 0) {
-    return {
-      score: 0,
-      reason: 'No violations detected'
-    };
+  if (!violations || violations.length === 0) {
+    return { score: 0, reason: 'No violations detected' };
   }
 
-  // Simple normalization: 1 violation = 0.4, 2 = 0.8, 3+ = 1.0
-  const score = Math.min(0.4 * count, 1.0);
+  let score = 0;
+  violations.forEach((v) => {
+    const weight = SEVERITY_WEIGHTS[v.severity] || SEVERITY_WEIGHTS.medium;
+    score += weight;
+  });
+  if (score > 1) score = 1;
 
-  return {
-    score,
-    reason: `${count} violation(s) detected`
-  };
+  const top = violations[0];
+  const reason = `${violations.length} violation(s): ${top.message} (rule: ${top.id})`;
+
+  return { score, reason };
 }
 
-module.exports = {
-  computeDriftScore
-};
+module.exports = { computeDriftScore };

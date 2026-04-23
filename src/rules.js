@@ -1,38 +1,24 @@
-// src/rules.js
-
-/**
- * Evaluate rules against the contract.
- * This is intentionally simple but structured for expansion.
- *
- * Returns:
- * {
- *   violations: [{ id, message, severity }],
- *   passed: boolean
- * }
- */
 function evaluateRules({ contract, schema }) {
   const violations = [];
 
-  // Enforce required fields from schema
   if (Array.isArray(schema.requiredFields)) {
     schema.requiredFields.forEach((field) => {
       if (!(field in contract)) {
         violations.push({
           id: `missing:${field}`,
-          message: `Required field "${field}" is missing from contract`,
+          message: `Missing required field: ${field}`,
           severity: 'high'
         });
       }
     });
   }
 
-  // Enforce maxRiskLevel if present
   if (schema.maxRiskLevel !== undefined && contract.riskLevel !== undefined) {
     if (contract.riskLevel > schema.maxRiskLevel) {
       violations.push({
-        id: 'risk:level_exceeded',
-        message: `Contract riskLevel ${contract.riskLevel} exceeds max ${schema.maxRiskLevel}`,
-        severity: 'high'
+        id: 'risk:exceeded',
+        message: `riskLevel ${contract.riskLevel} exceeds max ${schema.maxRiskLevel}`,
+        severity: 'critical'
       });
     }
   }
@@ -43,6 +29,4 @@ function evaluateRules({ contract, schema }) {
   };
 }
 
-module.exports = {
-  evaluateRules
-};
+module.exports = { evaluateRules };

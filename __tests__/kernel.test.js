@@ -1,29 +1,36 @@
-// __tests__/kernel.test.js
 const path = require('path');
 const { runGatekeeper } = require('../src/kernel');
 
-describe('Gatekeeper kernel', () => {
+describe('Gatekeeper kernel v1.1', () => {
   const base = path.resolve(__dirname, '..');
 
-  it('returns allow for a valid, low-risk contract', async () => {
-    const contractPath = path.join(base, '__tests__/fixtures/contract.valid.json');
-    const schemaPath = path.join(base, '.gatekeeper/schema.json');
+  it('allows a valid contract in enforce mode', async () => {
+    const contract = path.join(base, '__tests__/fixtures/contract.valid.json');
+    const schema = path.join(base, '.gatekeeper/schema.json');
 
-    const result = await runGatekeeper({ contractPath, schemaPath });
+    const result = await runGatekeeper({ contractPath: contract, schemaPath: schema, mode: 'enforce' });
 
-    expect(typeof result.shouldBlock).toBe('boolean');
     expect(result.shouldBlock).toBe(false);
-    expect(typeof result.reason).toBe('string');
-    expect(typeof result.score).toBe('number');
+    expect(result.failure_type).toBe('none');
   });
 
-  it('returns block for a high-risk contract', async () => {
-    const contractPath = path.join(base, '__tests__/fixtures/contract.drift.json');
-    const schemaPath = path.join(base, '.gatekeeper/schema.json');
+  it('blocks a high-risk contract in enforce mode', async () => {
+    const contract = path.join(base, '__tests__/fixtures/contract.drift.json');
+    const schema = path.join(base, '.gatekeeper/schema.json');
 
-    const result = await runGatekeeper({ contractPath, schemaPath });
+    const result = await runGatekeeper({ contractPath: contract, schemaPath: schema, mode: 'enforce' });
 
     expect(result.shouldBlock).toBe(true);
-    expect(result.score).toBeGreaterThanOrEqual(0.7);
+    expect(result.failure_type).toBe('policy_violation');
+  });
+
+  it('does not block in observe mode, even with violations', async () => {
+    const contract = path.join(base, '__tests__/fixtures/contract.drift.json');
+    const schema = path.join(base, '.gatekeeper/schema.json');
+
+    const result = await runGatekeeper({ contractPath: contract, schemaPath: schema, mode: 'observe' });
+
+    expect(result.shouldBlock).toBe(false);
+    expect(result.failure_type).toBe('policy_violation');
   });
 });
