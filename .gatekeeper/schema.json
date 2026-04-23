@@ -2,13 +2,8 @@
   "requiredFields": ["serviceName", "riskLevel"],
   "maxRiskLevel": 2,
   "rules": [
-    {
-      "id": "required:serviceName",
-      "description": "Service name must be present"
-    },
-    {
-      "id": "required:riskLevel",
-      "description": "Risk level must be present and within bounds"
-    }
+    { "id": "required:serviceName", "severity": "high" },
+    { "id": "required:riskLevel", "severity": "high" },
+    { "id": "risk:limit", "severity": "critical" }
   ]
 }

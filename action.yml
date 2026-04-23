@@ -1,5 +1,5 @@
 name: "Vireon Gatekeeper"
-description: "Governance-grade PR gate: contract + schema + drift scoring."
+description: "Governance kernel: contract + schema + drift scoring."
 author: "doctorfixes"
 
 inputs:
@@ -11,14 +11,20 @@ inputs:
     description: "Path to Gatekeeper schema JSON"
     required: true
     default: ".gatekeeper/schema.json"
+  mode:
+    description: "observe | enforce"
+    required: false
+    default: "enforce"
 
 outputs:
   should_block:
     description: "true if the PR should be blocked"
   reason:
-    description: "Human-readable explanation for the decision"
+    description: "Explanation for the decision"
   score:
     description: "Drift/risk score between 0 and 1"
+  failure_type:
+    description: "policy_violation | config_error | engine_error | none"
 
 runs:
   using: "node16"
