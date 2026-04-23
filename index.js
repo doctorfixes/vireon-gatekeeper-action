@@ -26,8 +26,11 @@ async function main() {
     const octokit = github.getOctokit(token);
     const context = github.context;
 
+    // Only post comments on pull request events
+    if (!context.payload.pull_request) return;
+
     // Load base contract for diff
-    const baseContractPath = contractPath.replace('contract.json', 'contract.base.json');
+    const baseContractPath = path.join(path.dirname(contractPath), 'contract.base.json');
     let diff = null;
 
     if (fs.existsSync(baseContractPath)) {

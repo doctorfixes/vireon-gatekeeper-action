@@ -4,7 +4,9 @@ function diffContracts(base, head) {
   const keys = new Set([...Object.keys(base), ...Object.keys(head)]);
 
   keys.forEach((key) => {
-    if (base[key] !== head[key]) {
+    const baseVal = JSON.stringify(base[key]);
+    const headVal = JSON.stringify(head[key]);
+    if (baseVal !== headVal) {
       diff[key] = { from: base[key], to: head[key] };
     }
   });
